@@ -7,8 +7,8 @@ import com.example.domain.device.DeviceController
 class AIBrain(
     private val deviceController: DeviceController,
     private val preferences: PeterPreferences,
-    private val cloudProvider: AIProvider = GeminiCloudProvider(),
-    private val offlineProvider: AIProvider = OfflineCommandProvider()
+    private val cloudProvider: AIProvider = GeminiCloudProvider(preferences),
+    private val offlineProvider: AIProvider = OfflineCommandProvider(preferences)
 ) {
     suspend fun processUserPrompt(prompt: String): AIResponse {
         val mode = preferences.settings.value.aiProvider
@@ -19,9 +19,9 @@ class AIBrain(
             return offlineProvider.analyzeCommand(prompt)
         }
 
-        // Fast path: if the command is a direct, obvious local device command (e.g. flashlight, volume, battery), offline can resolve instantly without network latency
+        // Fast path: if the command is a direct, obvious local device command (e.g. flashlight, volume, battery, proof, emergency), offline can resolve instantly without network latency
         val localAttempt = offlineProvider.analyzeCommand(prompt)
-        if (localAttempt.intent.type != IntentType.AI_QUERY && localAttempt.intent.confidence >= 0.90f) {
+        if (localAttempt.intent.type != IntentType.AI_QUERY && localAttempt.intent.type != IntentType.WEB_SEARCH && localAttempt.intent.confidence >= 0.90f) {
             return localAttempt
         }
 
@@ -33,5 +33,31 @@ class AIBrain(
 
         // Fallback: If cloud had network failure or missing API key, fall back to offline provider
         return localAttempt
+    }
+
+    suspend fun analyzeScreen(bitmap: android.graphics.Bitmap, prompt: String): AIResponse {
+        val netInfo = deviceController.getNetworkInfo()
+        if (!netInfo.isConnected) {
+            return AIResponse(
+                intent = com.example.core.model.PeterIntent(
+                    type = IntentType.SCREEN_SEARCH,
+                    rawText = prompt,
+                    query = "Screen Search"
+                ),
+                directAnswer = "I need an internet connection to analyze your shared screen with my Gemini vision brain, mate! Please connect to Wi-Fi or mobile data."
+            )
+        }
+
+        if (cloudProvider is GeminiCloudProvider) {
+            return cloudProvider.analyzeScreenImage(bitmap, prompt)
+        }
+        return AIResponse(
+            intent = com.example.core.model.PeterIntent(
+                type = IntentType.SCREEN_SEARCH,
+                rawText = prompt,
+                query = "Screen Search"
+            ),
+            directAnswer = "Screen visual analysis requires the online Gemini cloud brain!"
+        )
     }
 }

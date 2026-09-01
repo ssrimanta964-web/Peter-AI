@@ -28,6 +28,16 @@ class PeterWakeWordDetector(
     private val _isWakeWordActive = MutableStateFlow(false)
     val isWakeWordActive: StateFlow<Boolean> = _isWakeWordActive.asStateFlow()
 
+    private val wakePatterns = listOf(
+        "hey peter", "hello peter", "hi peter", "ok peter", "okay peter",
+        "hey piter", "hello piter", "hi piter", "namaste peter", "peter"
+    )
+
+    private fun isWakeWord(rawText: String): Boolean {
+        val text = rawText.lowercase(Locale.ROOT).trim()
+        return wakePatterns.any { pattern -> text.contains(pattern) }
+    }
+
     fun startContinuousWakeWordListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) return
 
@@ -45,7 +55,13 @@ class PeterWakeWordDetector(
             // Ignore
         }
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+        val recognizer = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        } else {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        }
+
+        speechRecognizer = recognizer.apply {
             setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onBeginningOfSpeech() {}
@@ -63,7 +79,7 @@ class PeterWakeWordDetector(
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.firstOrNull()?.lowercase(Locale.ROOT) ?: ""
                     
-                    if (text.contains("hey peter") || text.contains("peter") || text.contains("ok peter")) {
+                    if (isWakeWord(text)) {
                         onWakeWordDetected(text)
                     }
 
@@ -76,7 +92,7 @@ class PeterWakeWordDetector(
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.firstOrNull()?.lowercase(Locale.ROOT) ?: ""
                     
-                    if (text.contains("hey peter") || text.contains("peter") || text.contains("ok peter")) {
+                    if (isWakeWord(text)) {
                         onWakeWordDetected(text)
                         stop()
                         scheduleRestart(1000)
@@ -92,6 +108,7 @@ class PeterWakeWordDetector(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 2000L)
         }
 

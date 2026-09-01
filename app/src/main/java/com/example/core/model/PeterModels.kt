@@ -27,6 +27,10 @@ enum class IntentType {
     TIMER,
     PHONE_STATUS,
     NETWORK_STATUS,
+    WEB_SEARCH,
+    SHOW_PROOF,
+    SCREEN_SEARCH,
+    EMERGENCY_LOCKDOWN,
     AI_QUERY,
     UNKNOWN
 }
@@ -54,7 +58,8 @@ data class CommandResult(
     val spokenResponse: String,
     val displayDetails: String = "",
     val requiresPermission: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val searchQuery: String? = null
 )
 
 /**
@@ -66,5 +71,7 @@ data class ChatMessage(
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),
     val intentType: IntentType? = null,
-    val statusSuccess: Boolean? = null
+    val statusSuccess: Boolean? = null,
+    val searchQuery: String? = null
 )
+

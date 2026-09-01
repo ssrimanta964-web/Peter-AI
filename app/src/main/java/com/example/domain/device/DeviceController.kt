@@ -10,6 +10,7 @@ import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.SystemClock
@@ -27,6 +28,8 @@ interface DeviceController {
     fun setVolumeLevel(levelPercent: Int): VolumeStatus
     fun openApplication(appName: String): Result<String>
     fun openSettingsScreen(settingName: String): Result<String>
+    fun searchWeb(query: String): Result<String>
+    fun openBrowserUrl(url: String): Result<String>
     fun setAlarm(hour: Int, minute: Int, message: String): Result<String>
     fun setTimer(lengthSeconds: Int, message: String): Result<String>
     fun getNetworkInfo(): NetworkStatus
@@ -248,6 +251,46 @@ class AndroidDeviceController(private val context: Context) : DeviceController {
             }
             context.startActivity(intent)
             Result.success("Opening ${settingName.ifEmpty { "system" }} settings")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun searchWeb(query: String): Result<String> {
+        val trimmed = query.trim()
+        return try {
+            val uri = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                Uri.parse(trimmed)
+            } else {
+                Uri.parse("https://www.google.com/search?q=${Uri.encode(trimmed)}")
+            }
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Searching Google for $trimmed")
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Intent.ACTION_WEB_SEARCH).apply {
+                    putExtra(android.app.SearchManager.QUERY, trimmed)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                Result.success("Searching web for $trimmed")
+            } catch (e2: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override fun openBrowserUrl(url: String): Result<String> {
+        return try {
+            val formatted = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(formatted)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Opening $formatted")
         } catch (e: Exception) {
             Result.failure(e)
         }

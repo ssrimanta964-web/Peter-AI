@@ -23,7 +23,8 @@ class PeterRepository(
                 isUser = message.isUser,
                 timestamp = message.timestamp,
                 intentTypeName = message.intentType?.name,
-                statusSuccess = message.statusSuccess
+                statusSuccess = message.statusSuccess,
+                searchQuery = message.searchQuery
             )
         )
     }

@@ -13,6 +13,8 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
+import android.os.PowerManager
+import com.example.core.model.IntentType
 import com.example.data.local.PeterDatabase
 import com.example.data.local.PeterPreferences
 import com.example.data.local.PeterRepository
@@ -49,8 +51,29 @@ class PeterWakeWordService : Service() {
 
         wakeWordDetector = PeterWakeWordDetector(this) { detectedText ->
             serviceScope.launch {
+                try {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    @Suppress("DEPRECATION")
+                    val wakeLock = powerManager?.newWakeLock(
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                        "Peter:WakeWordWakeLock"
+                    )
+                    wakeLock?.acquire(3000L)
+                } catch (e: Exception) {
+                    // Ignore wake lock error
+                }
+
                 val result = commandRouter?.routeAndExecute(detectedText)
                 if (result != null) {
+                    if (result.intentType == IntentType.EMERGENCY_LOCKDOWN) {
+                        preferences.setLockdownActive(true)
+                    }
+                    
+                    val uiIntent = Intent(this@PeterWakeWordService, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    startActivity(uiIntent)
+
                     if (preferences.settings.value.autoSpeakResponses) {
                         val s = preferences.settings.value
                         tts?.speak(result.spokenResponse, s.speechRate, s.speechPitch, s.voiceName)
@@ -90,11 +113,14 @@ class PeterWakeWordService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "PETER Wake Word Service",
-                NotificationManager.IMPORTANCE_LOW
+                "PETER Silent Service",
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
                 description = "Background listening service for 'Hey Peter' wake word"
                 setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -113,12 +139,16 @@ class PeterWakeWordService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("PETER AI Assistant Active")
+            .setContentTitle("PETER AI Active")
             .setContentText("Listening for 'Hey Peter' • Low-Power Background Engine")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setSound(null)
+            .setVibrate(null)
+            .setDefaults(0)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
     }

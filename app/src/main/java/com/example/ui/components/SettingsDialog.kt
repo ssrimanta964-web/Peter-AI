@@ -16,12 +16,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,12 +33,18 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +60,7 @@ import com.example.ui.theme.SophisticatedCard
 import com.example.ui.theme.SophisticatedCyan
 import com.example.ui.theme.SophisticatedPanel
 import com.example.ui.theme.SophisticatedSurface
+import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
@@ -63,13 +74,20 @@ fun SettingsDialog(
     onSpeechRateChange: (Float) -> Unit,
     onSpeechPitchChange: (Float) -> Unit,
     onVoiceChange: (String) -> Unit,
+    onPreferredLanguageChange: (String) -> Unit,
     onAiProviderChange: (String) -> Unit,
     onWakeWordChange: (Boolean) -> Unit,
     onLowPowerChange: (Boolean) -> Unit,
     onAutoSpeakChange: (Boolean) -> Unit,
+    onUpdateBossProfile: (name: String, title: String, details: String, nickname: String) -> Unit,
     onClearHistory: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var bossNameInput by remember(settings.bossName) { mutableStateOf(settings.bossName) }
+    var bossTitleInput by remember(settings.bossTitle) { mutableStateOf(settings.bossTitle) }
+    var bossDetailsInput by remember(settings.bossDetails) { mutableStateOf(settings.bossDetails) }
+    var profileSaved by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -111,8 +129,251 @@ fun SettingsDialog(
                     }
                 }
 
-                // 1. VOICE SYNTHESIS SETTINGS
+                // 0. BOSS & CREATOR PERSONAL DETAILS
+                SettingsSectionHeader(icon = Icons.Default.Person, title = "BOSS & CREATOR PROFILE")
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SophisticatedCyan.copy(alpha = 0.08f))
+                        .border(1.dp, SophisticatedCyan.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "👑 AI Boss Identity",
+                                color = TextWhite,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "When someone asks PETER \"Who is your boss?\", \"Who made you?\", or \"Who created you?\", PETER will answer using these details with Tom Holland's signature humor in English, Hindi, or Bengali!",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelSmall,
+                            lineHeight = 15.sp
+                        )
+
+                        // Boss Name Input
+                        OutlinedTextField(
+                            value = bossNameInput,
+                            onValueChange = {
+                                bossNameInput = it
+                                profileSaved = false
+                            },
+                            label = { Text("Your Name (Boss / Creator)", color = TextSecondary, style = MaterialTheme.typography.labelSmall) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedBorderColor = SophisticatedCyan,
+                                unfocusedBorderColor = SophisticatedBorder,
+                                focusedContainerColor = SophisticatedCard,
+                                unfocusedContainerColor = SophisticatedCard
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_boss_name")
+                        )
+
+                        // Boss Title Input
+                        OutlinedTextField(
+                            value = bossTitleInput,
+                            onValueChange = {
+                                bossTitleInput = it
+                                profileSaved = false
+                            },
+                            label = { Text("Your Title / Role (e.g. Tech Lead, Creator)", color = TextSecondary, style = MaterialTheme.typography.labelSmall) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedBorderColor = SophisticatedCyan,
+                                unfocusedBorderColor = SophisticatedBorder,
+                                focusedContainerColor = SophisticatedCard,
+                                unfocusedContainerColor = SophisticatedCard
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_boss_title")
+                        )
+
+                        // Boss Details / Bio Input
+                        OutlinedTextField(
+                            value = bossDetailsInput,
+                            onValueChange = {
+                                bossDetailsInput = it
+                                profileSaved = false
+                            },
+                            label = { Text("Personal Details, Bio & Accomplishments", color = TextSecondary, style = MaterialTheme.typography.labelSmall) },
+                            minLines = 2,
+                            maxLines = 4,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedBorderColor = SophisticatedCyan,
+                                unfocusedBorderColor = SophisticatedBorder,
+                                focusedContainerColor = SophisticatedCard,
+                                unfocusedContainerColor = SophisticatedCard
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_boss_details")
+                        )
+
+                        // Save Boss Profile Button
+                        Button(
+                            onClick = {
+                                onUpdateBossProfile(bossNameInput, bossTitleInput, bossDetailsInput, "Boss")
+                                profileSaved = true
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (profileSaved) StatusGreen else SophisticatedCyan
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_save_boss_profile")
+                        ) {
+                            Icon(
+                                imageVector = if (profileSaved) Icons.Default.Check else Icons.Default.Person,
+                                contentDescription = null,
+                                tint = SophisticatedBlack,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(
+                                text = if (profileSaved) "Boss Profile Saved ✓" else "Save Boss Profile",
+                                color = SophisticatedBlack,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+                }
+
+                // 1. LANGUAGE & MULTILINGUAL SETTINGS
+                SettingsSectionHeader(icon = Icons.Default.Language, title = "LANGUAGE & MULTILINGUAL")
+                
+                // Trilingual badge
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SophisticatedCyan.copy(alpha = 0.10f))
+                        .border(1.dp, SophisticatedCyan.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = null,
+                            tint = SophisticatedCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Fluent in 3 Languages",
+                                color = TextWhite,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "English • हिन्दी (Hindi) • বাংলা (Bengali)",
+                                color = SophisticatedCyan,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                val languageOptions = listOf(
+                    "Auto Detect (English, Hindi, Bengali)",
+                    "English",
+                    "Hindi (हिन्दी)",
+                    "Bengali (বাংলা)"
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Preferred Voice & Speech Language", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    languageOptions.forEach { lang ->
+                        val isSelected = settings.preferredLanguage == lang
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) SophisticatedCyan.copy(alpha = 0.18f) else SophisticatedCard)
+                                .border(1.dp, if (isSelected) SophisticatedCyan else SophisticatedBorder, RoundedCornerShape(10.dp))
+                                .clickable { onPreferredLanguageChange(lang) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = lang,
+                                    color = if (isSelected) SophisticatedCyan else TextWhite,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                if (isSelected) {
+                                    Text("ACTIVE", color = SophisticatedCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. VOICE SYNTHESIS SETTINGS
                 SettingsSectionHeader(icon = Icons.Default.RecordVoiceOver, title = "VOICE ENGINE")
+
+                // Voice Persona Badge
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SophisticatedCyan.copy(alpha = 0.12f))
+                        .border(1.dp, SophisticatedCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RecordVoiceOver,
+                            contentDescription = null,
+                            tint = SophisticatedCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Tom Holland Voice Persona",
+                                color = TextWhite,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Energetic, witty & funny young British male hero",
+                                color = SophisticatedCyan,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
 
                 // Auto Speak Toggle
                 Row(
@@ -140,7 +401,7 @@ fun SettingsDialog(
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Speech Speed", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Text(String.format("%.1fx", settings.speechRate), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
+                        Text(String.format("%.2fx", settings.speechRate), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
                     }
                     Slider(
                         value = settings.speechRate,
@@ -156,7 +417,7 @@ fun SettingsDialog(
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Voice Pitch", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Text(String.format("%.1fx", settings.speechPitch), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
+                        Text(String.format("%.2fx", settings.speechPitch), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
                     }
                     Slider(
                         value = settings.speechPitch,

@@ -7,14 +7,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class PeterSettings(
-    val speechRate: Float = 1.0f,
-    val speechPitch: Float = 1.0f,
-    val voiceName: String = "Default",
+    val speechRate: Float = 1.08f,
+    val speechPitch: Float = 1.12f,
+    val voiceName: String = "Tom Holland Male (Default)",
+    val preferredLanguage: String = "Auto Detect (English, Hindi, Bengali)", // "Auto Detect (English, Hindi, Bengali)", "English", "Hindi (हिन्दी)", "Bengali (বাংলা)"
     val aiProvider: String = "Auto (Gemini + Local)", // "Auto (Gemini + Local)", "Local Only", "Cloud Only"
     val wakeWordEnabled: Boolean = false,
     val lowPowerMode: Boolean = false,
     val animationQuality: String = "High", // "High", "Medium", "Low"
-    val autoSpeakResponses: Boolean = true
+    val autoSpeakResponses: Boolean = true,
+    val bossName: String = "Srimanta",
+    val bossTitle: String = "Creator & Boss",
+    val bossDetails: String = "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!",
+    val bossNickname: String = "Boss",
+    val isLockdownActive: Boolean = false
 )
 
 class PeterPreferences(context: Context) {
@@ -25,15 +31,41 @@ class PeterPreferences(context: Context) {
 
     private fun loadSettings(): PeterSettings {
         return PeterSettings(
-            speechRate = prefs.getFloat(KEY_SPEECH_RATE, 1.0f),
-            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.0f),
-            voiceName = prefs.getString(KEY_VOICE_NAME, "Default") ?: "Default",
+            speechRate = prefs.getFloat(KEY_SPEECH_RATE, 1.08f),
+            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.12f),
+            voiceName = prefs.getString(KEY_VOICE_NAME, "Tom Holland Male (Default)") ?: "Tom Holland Male (Default)",
+            preferredLanguage = prefs.getString(KEY_LANGUAGE, "Auto Detect (English, Hindi, Bengali)") ?: "Auto Detect (English, Hindi, Bengali)",
             aiProvider = prefs.getString(KEY_AI_PROVIDER, "Auto (Gemini + Local)") ?: "Auto (Gemini + Local)",
             wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD, false),
             lowPowerMode = prefs.getBoolean(KEY_LOW_POWER, false),
             animationQuality = prefs.getString(KEY_ANIM_QUALITY, "High") ?: "High",
-            autoSpeakResponses = prefs.getBoolean(KEY_AUTO_SPEAK, true)
+            autoSpeakResponses = prefs.getBoolean(KEY_AUTO_SPEAK, true),
+            bossName = prefs.getString(KEY_BOSS_NAME, "Srimanta") ?: "Srimanta",
+            bossTitle = prefs.getString(KEY_BOSS_TITLE, "Creator & Boss") ?: "Creator & Boss",
+            bossDetails = prefs.getString(KEY_BOSS_DETAILS, "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!") ?: "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!",
+            bossNickname = prefs.getString(KEY_BOSS_NICKNAME, "Boss") ?: "Boss",
+            isLockdownActive = prefs.getBoolean(KEY_LOCKDOWN_ACTIVE, false)
         )
+    }
+
+    fun updateBossProfile(name: String, title: String, details: String, nickname: String = "Boss") {
+        prefs.edit()
+            .putString(KEY_BOSS_NAME, name.trim())
+            .putString(KEY_BOSS_TITLE, title.trim())
+            .putString(KEY_BOSS_DETAILS, details.trim())
+            .putString(KEY_BOSS_NICKNAME, nickname.trim())
+            .apply()
+        _settings.value = _settings.value.copy(
+            bossName = name.trim().ifEmpty { "Srimanta" },
+            bossTitle = title.trim().ifEmpty { "Creator & Boss" },
+            bossDetails = details.trim().ifEmpty { "Visionary creator of PETER AI" },
+            bossNickname = nickname.trim().ifEmpty { "Boss" }
+        )
+    }
+
+    fun updatePreferredLanguage(language: String) {
+        prefs.edit().putString(KEY_LANGUAGE, language).apply()
+        _settings.value = _settings.value.copy(preferredLanguage = language)
     }
 
     fun updateSpeechRate(rate: Float) {
@@ -76,14 +108,25 @@ class PeterPreferences(context: Context) {
         _settings.value = _settings.value.copy(autoSpeakResponses = enabled)
     }
 
+    fun setLockdownActive(active: Boolean) {
+        prefs.edit().putBoolean(KEY_LOCKDOWN_ACTIVE, active).apply()
+        _settings.value = _settings.value.copy(isLockdownActive = active)
+    }
+
     companion object {
         private const val KEY_SPEECH_RATE = "key_speech_rate"
         private const val KEY_SPEECH_PITCH = "key_speech_pitch"
         private const val KEY_VOICE_NAME = "key_voice_name"
+        private const val KEY_LANGUAGE = "key_preferred_language"
         private const val KEY_AI_PROVIDER = "key_ai_provider"
         private const val KEY_WAKE_WORD = "key_wake_word"
         private const val KEY_LOW_POWER = "key_low_power"
         private const val KEY_ANIM_QUALITY = "key_anim_quality"
         private const val KEY_AUTO_SPEAK = "key_auto_speak"
+        private const val KEY_BOSS_NAME = "key_boss_name"
+        private const val KEY_BOSS_TITLE = "key_boss_title"
+        private const val KEY_BOSS_DETAILS = "key_boss_details"
+        private const val KEY_BOSS_NICKNAME = "key_boss_nickname"
+        private const val KEY_LOCKDOWN_ACTIVE = "key_lockdown_active"
     }
 }

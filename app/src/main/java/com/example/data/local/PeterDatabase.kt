@@ -22,7 +22,8 @@ data class ChatMessageEntity(
     val isUser: Boolean,
     val timestamp: Long,
     val intentTypeName: String? = null,
-    val statusSuccess: Boolean? = null
+    val statusSuccess: Boolean? = null,
+    val searchQuery: String? = null
 ) {
     fun toChatMessage(): ChatMessage = ChatMessage(
         id = id,
@@ -30,7 +31,8 @@ data class ChatMessageEntity(
         isUser = isUser,
         timestamp = timestamp,
         intentType = intentTypeName?.let { runCatching { IntentType.valueOf(it) }.getOrNull() },
-        statusSuccess = statusSuccess
+        statusSuccess = statusSuccess,
+        searchQuery = searchQuery
     )
 }
 
@@ -73,7 +75,7 @@ interface CommandAuditDao {
 
 @Database(
     entities = [ChatMessageEntity::class, CommandAuditEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PeterDatabase : RoomDatabase() {
@@ -90,7 +92,7 @@ abstract class PeterDatabase : RoomDatabase() {
                     context.applicationContext,
                     PeterDatabase::class.java,
                     "peter_assistant.db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration(dropAllTables = true).build()
                 INSTANCE = instance
                 instance
             }

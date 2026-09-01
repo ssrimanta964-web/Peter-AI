@@ -43,6 +43,12 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     private val _peterState = MutableStateFlow(PeterState.IDLE)
     val peterState: StateFlow<PeterState> = _peterState.asStateFlow()
 
+    private val _isScreenAnalyzing = MutableStateFlow(false)
+    val isScreenAnalyzing: StateFlow<Boolean> = _isScreenAnalyzing.asStateFlow()
+
+    private val _screenCaptureRequested = MutableStateFlow(false)
+    val screenCaptureRequested: StateFlow<Boolean> = _screenCaptureRequested.asStateFlow()
+
     private val _statusText = MutableStateFlow("PETER standing by. Ready for input.")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
 
@@ -118,7 +124,11 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startListening() {
         tts?.stop()
-        speechRecognizer?.startListening()
+        speechRecognizer?.startListening(settings.value.preferredLanguage)
+    }
+
+    fun updatePreferredLanguage(language: String) {
+        preferences.updatePreferredLanguage(language)
     }
 
     fun stopListening() {
@@ -163,13 +173,19 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
                     isUser = false,
                     timestamp = System.currentTimeMillis(),
                     intentType = commandResult.intentType,
-                    statusSuccess = commandResult.success
+                    statusSuccess = commandResult.success,
+                    searchQuery = commandResult.searchQuery
                 )
             )
 
             repository.recordAuditLog(rawPrompt, commandResult)
 
             _statusText.value = commandResult.spokenResponse
+
+            // Emergency Lockdown Activation Trigger
+            if (commandResult.intentType == IntentType.EMERGENCY_LOCKDOWN) {
+                activateLockdownInternal()
+            }
 
             // Voice response
             if (preferences.settings.value.autoSpeakResponses) {
@@ -178,6 +194,151 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 _peterState.value = if (commandResult.success) PeterState.IDLE else PeterState.ERROR
             }
+        }
+    }
+
+    private fun activateLockdownInternal() {
+        stopListening()
+        preferences.setLockdownActive(true)
+        _statusText.value = "⚠️ CODE RED: FULL EMERGENCY LOCKDOWN ENGAGED"
+    }
+
+    fun activateLockdown(spokenMessage: String? = null) {
+        stopListening()
+        preferences.setLockdownActive(true)
+        _statusText.value = "⚠️ CODE RED: FULL EMERGENCY LOCKDOWN ENGAGED"
+        val msg = spokenMessage ?: "CODE RED PROTOCOL ACTIVATED! Full security lockdown engaged! Enter authorization password to deactivate."
+        if (preferences.settings.value.autoSpeakResponses) {
+            val s = preferences.settings.value
+            tts?.speak(msg, s.speechRate, s.speechPitch, s.voiceName)
+        }
+    }
+
+    fun deactivateLockdown(passwordAttempt: String): Boolean {
+        val trimmed = passwordAttempt.trim()
+        val isCorrect = trimmed.equals("Daddy is home", ignoreCase = true)
+        if (isCorrect) {
+            preferences.setLockdownActive(false)
+            _statusText.value = "🔓 Lockdown deactivated. Normal operations restored."
+            
+            val lang = com.example.domain.ai.LanguageHelper.detectLanguage(preferences.settings.value.preferredLanguage)
+            val unlockMsg = when (lang) {
+                com.example.domain.ai.SupportedLanguage.BENGALI ->
+                    "লকডাউন মোড নিষ্ক্রিয় করা হয়েছে! স্বাগতম বস! সমস্ত সিস্টেম পুনরুদ্ধার করা হয়েছে!"
+                com.example.domain.ai.SupportedLanguage.HINDI ->
+                    "लॉकडाउन मोड बंद कर दिया गया है! वेलकम बैक बॉस! सारे सिस्टम्स वापस चालू हो गए हैं!"
+                com.example.domain.ai.SupportedLanguage.ENGLISH ->
+                    "Lockdown deactivated! Welcome back, Boss! All systems and controls restored."
+            }
+
+            viewModelScope.launch {
+                repository.saveMessage(
+                    ChatMessage(
+                        text = "🔓 [CODE RED OVERRIDE] Lockdown deactivated. Authorization accepted.",
+                        isUser = false,
+                        timestamp = System.currentTimeMillis(),
+                        intentType = IntentType.EMERGENCY_LOCKDOWN,
+                        statusSuccess = true
+                    )
+                )
+            }
+
+            if (preferences.settings.value.autoSpeakResponses) {
+                val s = preferences.settings.value
+                tts?.speak(unlockMsg, s.speechRate, s.speechPitch, s.voiceName)
+            }
+            return true
+        } else {
+            val failMsg = "Access Denied: Invalid security passphrase."
+            if (preferences.settings.value.autoSpeakResponses) {
+                val s = preferences.settings.value
+                tts?.speak(failMsg, s.speechRate, s.speechPitch, s.voiceName)
+            }
+            return false
+        }
+    }
+
+    fun requestScreenShare() {
+        _screenCaptureRequested.value = true
+    }
+
+    fun onScreenCaptureHandled() {
+        _screenCaptureRequested.value = false
+    }
+
+    fun analyzeSharedScreen(bitmap: android.graphics.Bitmap, userPrompt: String = "") {
+        _isScreenAnalyzing.value = true
+        _peterState.value = PeterState.PROCESSING
+        _statusText.value = "Peter's Spider-Sense analyzing screen with Multimodal AI..."
+
+        val prompt = userPrompt.ifBlank { "What is on my screen? Search and explain it in detail." }
+
+        viewModelScope.launch {
+            repository.saveMessage(
+                ChatMessage(
+                    text = "🖥️ [SHARED SCREEN] Analyzing screen content...",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis(),
+                    intentType = IntentType.SCREEN_SEARCH
+                )
+            )
+
+            val aiResponse = aiBrain.analyzeScreen(bitmap, prompt)
+            _isScreenAnalyzing.value = false
+
+            val spokenAnswer = aiResponse.directAnswer ?: "I reviewed your screen, mate!"
+            val searchQuery = aiResponse.intent.query.ifBlank { "Screen Search" }
+
+            repository.saveMessage(
+                ChatMessage(
+                    text = spokenAnswer,
+                    isUser = false,
+                    timestamp = System.currentTimeMillis(),
+                    intentType = IntentType.SCREEN_SEARCH,
+                    statusSuccess = aiResponse.error == null,
+                    searchQuery = searchQuery
+                )
+            )
+
+            _statusText.value = spokenAnswer
+            _peterState.value = PeterState.IDLE
+
+            if (preferences.settings.value.autoSpeakResponses) {
+                val s = preferences.settings.value
+                tts?.speak(spokenAnswer, s.speechRate, s.speechPitch, s.voiceName)
+            }
+        }
+    }
+
+    fun searchWeb(query: String) {
+        deviceController.searchWeb(query)
+    }
+
+    fun showSearchProof(query: String? = null) {
+        val targetQuery = query?.ifBlank { null } ?: commandRouter.getLastSearchQuery() ?: "Google Search"
+        deviceController.searchWeb(targetQuery)
+        val lang = com.example.domain.ai.LanguageHelper.detectLanguage(preferences.settings.value.preferredLanguage)
+        val spoken = when (lang) {
+            com.example.domain.ai.SupportedLanguage.BENGALI -> "এই যে '$targetQuery' এর গুগলের প্রমাণের পেজ খুলে দিয়েছি বন্ধু!"
+            com.example.domain.ai.SupportedLanguage.HINDI -> "ये रहा '$targetQuery' के लिए गूगल पेज का प्रमाण, स्क्रीन पर खोल दिया है दोस्त!"
+            com.example.domain.ai.SupportedLanguage.ENGLISH -> "Opening the Google search page as verified proof for '$targetQuery', mate!"
+        }
+        _statusText.value = spoken
+        viewModelScope.launch {
+            repository.saveMessage(
+                ChatMessage(
+                    text = "🌐 [PROOF VERIFIED] Opened Google Search page for: \"$targetQuery\"",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis(),
+                    intentType = IntentType.SHOW_PROOF,
+                    statusSuccess = true,
+                    searchQuery = targetQuery
+                )
+            )
+        }
+        if (preferences.settings.value.autoSpeakResponses) {
+            val s = preferences.settings.value
+            tts?.speak(spoken, s.speechRate, s.speechPitch, s.voiceName)
         }
     }
 
@@ -203,6 +364,27 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
             _statusText.value = "Conversation and command logs cleared."
         }
     }
+
+    fun clearChatHistory() {
+        clearConversationHistory()
+    }
+
+    fun triggerEmergencyLockdown() {
+        activateLockdown()
+    }
+
+    fun unlockFromLockdown(password: String): Boolean {
+        return deactivateLockdown(password)
+    }
+
+    fun updateSpeechRate(rate: Float) = preferences.updateSpeechRate(rate)
+    fun updateSpeechPitch(pitch: Float) = preferences.updateSpeechPitch(pitch)
+    fun updateVoiceName(voiceName: String) = preferences.updateVoiceName(voiceName)
+    fun updateAiProvider(provider: String) = preferences.updateAiProvider(provider)
+    fun updateLowPowerMode(lowPower: Boolean) = preferences.updateLowPowerMode(lowPower)
+    fun updateAutoSpeak(autoSpeak: Boolean) = preferences.updateAutoSpeak(autoSpeak)
+    fun updateBossProfile(name: String, title: String, details: String, nickname: String) =
+        preferences.updateBossProfile(name, title, details, nickname)
 
     override fun onCleared() {
         speechRecognizer?.stopListening()

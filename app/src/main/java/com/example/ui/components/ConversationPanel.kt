@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,7 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.model.ChatMessage
+import com.example.core.model.IntentType
 import com.example.ui.theme.SophisticatedBlack
 import com.example.ui.theme.SophisticatedBorder
 import com.example.ui.theme.SophisticatedBorderLight
@@ -63,15 +69,32 @@ fun QuickCommandChips(
     modifier: Modifier = Modifier
 ) {
     val quickCommands = listOf(
+        "Share screen with Peter 🖥️",
+        "Look at my screen 🔍",
+        "मेरी स्क्रीन देखो 🖥️",
+        "আমার স্ক্রিন দেখো 🖥️",
+        "Hey Peter code red 🚨",
+        "Who is your boss? 👑",
+        "तुम्हारा बॉस कौन है? 👑",
+        "তোমার বস কে? 👑",
+        "कोड रेड 🚨",
+        "কোড রেড 🚨",
+        "Tell me a joke!",
+        "एक जोक सुनाओ! 🇮🇳",
+        "একটি কৌতুক বলো! 🇧🇩",
+        "Search on Google for Spider-Man",
         "Turn on flashlight",
+        "फ्लैशलाइट ऑन करो",
+        "টর্চ জ্বালাও",
         "Battery percentage",
-        "Volume to 75%",
+        "बैटरी कितनी है?",
+        "ব্যাটারি কত?",
+        "Who are you?",
+        "तुम कौन हो?",
+        "তুমি কে?",
         "What time is it?",
-        "Network status",
-        "System specs",
-        "Open YouTube",
-        "Open Settings",
-        "Who are you?"
+        "সময় কত?",
+        "समय क्या है?"
     )
 
     LazyRow(
@@ -80,12 +103,13 @@ fun QuickCommandChips(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(quickCommands) { cmd ->
+            val isSearch = cmd.startsWith("Search")
             Box(
                 modifier = Modifier
                     .testTag("chip_${cmd.replace(" ", "_").lowercase()}")
                     .clip(RoundedCornerShape(20.dp))
-                    .background(SophisticatedCard)
-                    .border(1.dp, SophisticatedBorder, RoundedCornerShape(20.dp))
+                    .background(if (isSearch) SophisticatedCyan.copy(alpha = 0.15f) else SophisticatedCard)
+                    .border(1.dp, if (isSearch) SophisticatedCyan.copy(alpha = 0.5f) else SophisticatedBorder, RoundedCornerShape(20.dp))
                     .clickable { onCommandSelect(cmd) }
                     .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
@@ -94,7 +118,7 @@ fun QuickCommandChips(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bolt,
+                        imageVector = if (isSearch) Icons.Default.Search else Icons.Default.Bolt,
                         contentDescription = null,
                         tint = SophisticatedCyan,
                         modifier = Modifier.size(13.dp)
@@ -102,7 +126,7 @@ fun QuickCommandChips(
                     Text(
                         text = cmd,
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextPrimary,
+                        color = if (isSearch) TextWhite else TextPrimary,
                         fontSize = 11.sp
                     )
                 }
@@ -114,6 +138,7 @@ fun QuickCommandChips(
 @Composable
 fun ChatBubble(
     message: ChatMessage,
+    onWebSearch: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isUser = message.isUser
@@ -162,7 +187,7 @@ fun ChatBubble(
                     Text(
                         text = message.intentType.name,
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
+                        color = if (message.intentType == IntentType.WEB_SEARCH) SophisticatedCyan else TextMuted,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -178,12 +203,52 @@ fun ChatBubble(
                 .border(1.dp, border, shape)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isUser) TextWhite else TextPrimary,
-                lineHeight = 20.sp
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isUser) TextWhite else TextPrimary,
+                    lineHeight = 20.sp
+                )
+
+                // If this is a Web Search message or contains a query, show interactive proof button
+                if (!isUser && message.searchQuery != null && onWebSearch != null) {
+                    Box(
+                        modifier = Modifier
+                            .testTag("btn_open_google_search")
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SophisticatedCyan.copy(alpha = 0.15f))
+                            .border(1.dp, SophisticatedCyan.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                            .clickable { onWebSearch(message.searchQuery) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = "Show Google Proof",
+                                tint = SophisticatedCyan,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Show Google Proof: \"${message.searchQuery}\"",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SophisticatedCyan,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.OpenInBrowser,
+                                contentDescription = null,
+                                tint = SophisticatedCyan,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -192,6 +257,7 @@ fun ChatBubble(
 fun ConversationList(
     messages: List<ChatMessage>,
     listState: LazyListState,
+    onWebSearch: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (messages.isEmpty()) {
@@ -218,7 +284,7 @@ fun ConversationList(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "\"Peter, turn on the flashlight and check my current battery level.\"",
+                    text = "\"Search for Spider-Man news\" or \"Turn on flashlight\"",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -231,9 +297,13 @@ fun ConversationList(
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(messages, key = { it.id }) { msg ->
-                ChatBubble(message = msg)
+                ChatBubble(
+                    message = msg,
+                    onWebSearch = onWebSearch
+                )
             }
         }
     }
 }
+
 

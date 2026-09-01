@@ -9,6 +9,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,30 +31,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material.icons.automirrored.filled.ScreenShare
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,51 +56,44 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.model.PeterState
-import com.example.ui.components.ConversationList
+import com.example.ui.components.HudArcReactorCore
+import com.example.ui.components.HudBottomTelemetryPanel
+import com.example.ui.components.HudConversationOverlay
+import com.example.ui.components.HudLeftDockPanel
+import com.example.ui.components.HudRightDockPanel
+import com.example.ui.components.HudTopTelemetryPanel
+import com.example.ui.components.LockdownSecurityScreen
 import com.example.ui.components.PermissionsDashboardDialog
-import com.example.ui.components.PeterCoreVisualizer
-import com.example.ui.components.QuickCommandChips
 import com.example.ui.components.SettingsDialog
-import com.example.ui.components.TelemetryBar
+import com.example.ui.theme.HudBgDark
+import com.example.ui.theme.HudCyanNeon
+import com.example.ui.theme.HudPanelBg
+import com.example.ui.theme.HudPanelBorder
 import com.example.ui.theme.SophisticatedBlack
 import com.example.ui.theme.SophisticatedBorder
 import com.example.ui.theme.SophisticatedBorderLight
-import com.example.ui.theme.SophisticatedCard
-import com.example.ui.theme.SophisticatedCyan
-import com.example.ui.theme.SophisticatedCyanFaint
-import com.example.ui.theme.SophisticatedCyanGlow
-import com.example.ui.theme.SophisticatedCyanMedium
 import com.example.ui.theme.SophisticatedPanel
-import com.example.ui.theme.SophisticatedSurface
-import com.example.ui.theme.StatusAmber
-import com.example.ui.theme.StatusGreen
-import com.example.ui.theme.StatusRed
-import com.example.ui.theme.TextDarkMuted
 import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextPrimary
-import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.TextWhite
 
 @Composable
 fun PeterHomeScreen(
     viewModel: PeterViewModel,
+    onStartScreenShare: () -> Unit = {},
+    onPickScreenshot: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val keyboardController = LocalSoftwareKeyboardController.current
 
     val peterState by viewModel.peterState.collectAsStateWithLifecycle()
     val statusText by viewModel.statusText.collectAsStateWithLifecycle()
@@ -118,17 +106,19 @@ fun PeterHomeScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
     val availableVoices by viewModel.availableVoices.collectAsStateWithLifecycle()
+    val isScreenAnalyzing by viewModel.isScreenAnalyzing.collectAsStateWithLifecycle()
+    val screenCaptureRequested by viewModel.screenCaptureRequested.collectAsStateWithLifecycle()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showPermissionsDialog by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
+    var showScreenShareSheet by remember { mutableStateOf(false) }
+    var showConversationOverlay by remember { mutableStateOf(false) }
 
-    val listState = rememberLazyListState()
-
-    // Auto-scroll to latest message
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    // Handle ViewModel requested screen capture (e.g. triggered via voice)
+    LaunchedEffect(screenCaptureRequested) {
+        if (screenCaptureRequested) {
+            viewModel.onScreenCaptureHandled()
+            showScreenShareSheet = true
         }
     }
 
@@ -150,363 +140,367 @@ fun PeterHomeScreen(
         permissionLauncher.launch(permissions.toTypedArray())
     }
 
+    val onMicTrigger = {
+        val hasMic = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasMic) {
+            requestPermissions()
+        } else {
+            if (isListening) {
+                viewModel.stopListening()
+            } else {
+                viewModel.startListening()
+            }
+        }
+    }
+
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(SophisticatedBlack)
+            .background(HudBgDark)
             .imePadding(),
-        containerColor = SophisticatedBlack,
+        containerColor = HudBgDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF03182B),
+                            HudBgDark
+                        ),
+                        radius = 1200f
+                    )
+                )
                 .padding(WindowInsets.statusBars.asPaddingValues())
                 .padding(WindowInsets.navigationBars.asPaddingValues())
         ) {
-            // 1. SOPHISTICATED TOP HEADER
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // MAIN LANDSCAPE SCI-FI HUD LAYOUT
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "SYSTEM STATUS",
-                        color = SophisticatedCyan,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (peterState == PeterState.ERROR) StatusRed else SophisticatedCyan)
-                        )
-                        Text(
-                            text = "PETER V1.0.4 - ONLINE",
-                            color = TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                }
+                // 1. TOP TELEMETRY PANEL (CPU Cores, RAM, Swap, Wake Word)
+                HudTopTelemetryPanel(
+                    batteryStatus = battery,
+                    networkStatus = network,
+                    volumeStatus = volume,
+                    isWakeWordServiceRunning = settings.wakeWordEnabled,
+                    onToggleWakeWord = {
+                        viewModel.toggleWakeWord(!settings.wakeWordEnabled)
+                    },
+                    onRefreshTelemetry = { viewModel.refreshTelemetry() },
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
 
+                // 2. MIDDLE ROW (Left Dock + Center Arc Reactor Core + Right Dock)
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { viewModel.refreshTelemetry() },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, SophisticatedBorderLight, CircleShape)
-                            .testTag("btn_refresh_telemetry")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh Telemetry",
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { showPermissionsDialog = true },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, SophisticatedBorderLight, CircleShape)
-                            .testTag("btn_open_permissions")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = "Permissions",
-                            tint = SophisticatedCyan,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { showSettingsDialog = true },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, SophisticatedBorderLight, CircleShape)
-                            .testTag("btn_open_settings")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // Divider Line with subtle gradient
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .padding(horizontal = 20.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Color.Transparent,
-                                SophisticatedBorder,
-                                Color.Transparent
-                            )
-                        )
+                    // LEFT DOCK PANEL (App shortcuts + Holo Nodes)
+                    HudLeftDockPanel(
+                        onPhotosClick = { onPickScreenshot() },
+                        onTorchClick = { viewModel.executeUserPrompt("toggle flashlight") },
+                        onSnipScreenClick = { showScreenShareSheet = true },
+                        onMediaClick = { viewModel.executeUserPrompt("play spider man theme") },
+                        onChatLogClick = { showConversationOverlay = true },
+                        onSettingsClick = { showSettingsDialog = true },
+                        onInternetClick = { viewModel.executeUserPrompt("search tech news") },
+                        onShowProofClick = { viewModel.showSearchProof("quantum computing") },
+                        onPermissionsClick = { showPermissionsDialog = true },
+                        onClearChatClick = { viewModel.clearChatHistory() },
+                        modifier = Modifier.fillMaxHeight()
                     )
-            )
 
-            // 2. CENTRAL ANIMATED AI CORE
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PeterCoreVisualizer(
+                    // CENTER ARC REACTOR CORE (Live Clock, Holo Rings, Power / Actions)
+                    HudArcReactorCore(
                         state = peterState,
                         rmsLevel = rmsLevel,
-                        lowPowerMode = settings.lowPowerMode,
-                        modifier = Modifier.clickable {
-                            if (isListening) viewModel.stopListening() else viewModel.startListening()
-                        }
+                        isListening = isListening,
+                        isSpeaking = isSpeaking,
+                        onMicClick = onMicTrigger,
+                        onScreenShareClick = { showScreenShareSheet = true },
+                        onChatClick = { showConversationOverlay = true },
+                        onSettingsClick = { showSettingsDialog = true },
+                        onSecurityClick = { viewModel.triggerEmergencyLockdown() },
+                        modifier = Modifier.weight(1f)
                     )
 
-                    // Prompt / Transcript Subtext
-                    Text(
-                        text = if (statusText.isNotBlank()) "\"$statusText\"" else "\"Peter, turn on the flashlight and check my current battery level.\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextWhite,
-                        fontWeight = FontWeight.Light,
-                        letterSpacing = 0.25.sp,
-                        maxLines = 2,
-                        modifier = Modifier.padding(horizontal = 28.dp)
+                    // RIGHT DOCK PANEL (Holo Nodes + App shortcuts)
+                    HudRightDockPanel(
+                        onVoiceAssistantClick = onMicTrigger,
+                        onScreenShareClick = { showScreenShareSheet = true },
+                        onWakeWordClick = {
+                            viewModel.toggleWakeWord(!settings.wakeWordEnabled)
+                        },
+                        onLockdownClick = { viewModel.triggerEmergencyLockdown() },
+                        onTorchClick = { viewModel.executeUserPrompt("toggle flashlight") },
+                        onVolumeToggleClick = { viewModel.executeUserPrompt("volume status") },
+                        onGoogleProofClick = { viewModel.showSearchProof("Google AI Studio") },
+                        onCalculatorClick = { viewModel.executeUserPrompt("what is 42 * 98?") },
+                        modifier = Modifier.fillMaxHeight()
                     )
                 }
+
+                // 3. BOTTOM TELEMETRY PANEL (Network Download/Upload Spectrum, Holographic Globe, OS Tray)
+                HudBottomTelemetryPanel(
+                    networkStatus = network,
+                    statusMessage = statusText,
+                    onStatusClick = { showConversationOverlay = true },
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
 
-            // Quick Command Chips
-            QuickCommandChips(
-                onCommandSelect = { cmd ->
-                    viewModel.executeUserPrompt(cmd)
-                },
-                modifier = Modifier.padding(vertical = 6.dp)
-            )
-
-            // 3. CONVERSATION LOG
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
+            // HOLOGRAPHIC CONVERSATION & AI TERMINAL OVERLAY
+            AnimatedVisibility(
+                visible = showConversationOverlay,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
             ) {
-                ConversationList(
+                HudConversationOverlay(
                     messages = messages,
-                    listState = listState,
-                    modifier = Modifier.fillMaxSize()
+                    peterState = peterState,
+                    isListening = isListening,
+                    onSendMessage = { prompt ->
+                        viewModel.executeUserPrompt(prompt)
+                    },
+                    onMicClick = onMicTrigger,
+                    onSearchWeb = { query ->
+                        viewModel.showSearchProof(query)
+                    },
+                    onDismiss = { showConversationOverlay = false }
                 )
             }
 
-            // 4. SOPHISTICATED BOTTOM TELEMETRY & CONTROLS SECTION
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SophisticatedPanel)
-                    .border(1.dp, SophisticatedBorder)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Telemetry 2x2 Grid
-                TelemetryBar(
-                    battery = battery,
-                    network = network,
-                    volume = volume,
-                    wakeWordActive = settings.wakeWordEnabled,
-                    onBatteryClick = { viewModel.executeUserPrompt("battery status") },
-                    onNetworkClick = { viewModel.executeUserPrompt("network status") },
-                    onVolumeClick = { viewModel.executeUserPrompt("volume status") },
-                    onWakeWordClick = { showSettingsDialog = true }
+            // SCREEN SHARE DIALOG
+            if (showScreenShareSheet) {
+                ScreenShareDialog(
+                    onLiveCapture = {
+                        showScreenShareSheet = false
+                        onStartScreenShare()
+                    },
+                    onPickScreenshot = {
+                        showScreenShareSheet = false
+                        onPickScreenshot()
+                    },
+                    onDismiss = { showScreenShareSheet = false }
                 )
+            }
 
-                // Bottom Input & Voice Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // MULTIMODAL SCREEN SCANNER OVERLAY
+            AnimatedVisibility(
+                visible = isScreenAnalyzing,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Settings/Tool circular button
-                    IconButton(
-                        onClick = { showSettingsDialog = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, SophisticatedBorderLight, CircleShape)
-                            .background(SophisticatedBlack)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SophisticatedPanel),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, HudCyanNeon),
+                        modifier = Modifier.fillMaxWidth(0.65f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "System Settings",
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Stop Speaking Button if Active
-                    if (isSpeaking) {
-                        IconButton(
-                            onClick = { viewModel.stopSpeaking() },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(StatusRed.copy(alpha = 0.2f))
-                                .border(1.dp, StatusRed, CircleShape)
-                                .testTag("btn_stop_speaking")
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.VolumeOff,
-                                contentDescription = "Stop Speaking",
-                                tint = StatusRed
-                            )
-                        }
-                    }
-
-                    // Text Input Field
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        placeholder = { Text("Command PETER...", color = TextMuted) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("command_input_field"),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SophisticatedBlack,
-                            unfocusedContainerColor = SophisticatedBlack,
-                            focusedBorderColor = SophisticatedCyan,
-                            unfocusedBorderColor = SophisticatedBorder,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = {
-                            if (inputText.isNotBlank()) {
-                                viewModel.executeUserPrompt(inputText)
-                                inputText = ""
-                                keyboardController?.hide()
-                            }
-                        })
-                    )
-
-                    // Action Button (Send or Center Voice FAB)
-                    if (inputText.isNotBlank()) {
-                        IconButton(
-                            onClick = {
-                                viewModel.executeUserPrompt(inputText)
-                                inputText = ""
-                                keyboardController?.hide()
-                            },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(SophisticatedCyan)
-                                .testTag("btn_send_command")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Send",
-                                tint = SophisticatedBlack
-                            )
-                        }
-                    } else {
-                        // Sophisticated Center Voice Button
-                        Box(contentAlignment = Alignment.Center) {
-                            // Ambient cyan halo
                             Box(
                                 modifier = Modifier
-                                    .size(54.dp)
+                                    .size(64.dp)
                                     .clip(CircleShape)
-                                    .background(SophisticatedCyan.copy(alpha = 0.15f))
-                            )
-
-                            FloatingActionButton(
-                                onClick = {
-                                    val hasMic = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (!hasMic) {
-                                        requestPermissions()
-                                    } else {
-                                        if (isListening) {
-                                            viewModel.stopListening()
-                                        } else {
-                                            viewModel.startListening()
-                                        }
-                                    }
-                                },
-                                containerColor = if (isListening) StatusRed else SophisticatedCyan,
-                                contentColor = SophisticatedBlack,
-                                shape = CircleShape,
-                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .testTag("fab_voice_input")
+                                    .background(HudCyanNeon.copy(alpha = 0.2f))
+                                    .border(1.dp, HudCyanNeon, CircleShape),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                                    contentDescription = if (isListening) "Stop Listening" else "Voice Input",
-                                    modifier = Modifier.size(22.dp)
+                                    imageVector = Icons.AutoMirrored.Filled.ScreenShare,
+                                    contentDescription = "Screen Scanning",
+                                    tint = HudCyanNeon,
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
+
+                            Text(
+                                text = "Peter's Spider-Sense Visual Scan",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextWhite,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = "Analyzing your screen with Multimodal AI and searching background facts on Google...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                                color = HudCyanNeon,
+                                trackColor = SophisticatedBorder
+                            )
                         }
                     }
                 }
             }
-        }
 
-        // Dialogs
-        if (showSettingsDialog) {
-            SettingsDialog(
-                settings = settings,
-                availableVoices = availableVoices,
-                onSpeechRateChange = { viewModel.preferences.updateSpeechRate(it) },
-                onSpeechPitchChange = { viewModel.preferences.updateSpeechPitch(it) },
-                onVoiceChange = { viewModel.preferences.updateVoiceName(it) },
-                onAiProviderChange = { viewModel.preferences.updateAiProvider(it) },
-                onWakeWordChange = { viewModel.toggleWakeWord(it) },
-                onLowPowerChange = { viewModel.preferences.updateLowPowerMode(it) },
-                onAutoSpeakChange = { viewModel.preferences.updateAutoSpeak(it) },
-                onClearHistory = { viewModel.clearConversationHistory() },
-                onDismiss = { showSettingsDialog = false }
-            )
-        }
+            // SETTINGS DIALOG
+            if (showSettingsDialog) {
+                SettingsDialog(
+                    settings = settings,
+                    availableVoices = availableVoices,
+                    onSpeechRateChange = { viewModel.updateSpeechRate(it) },
+                    onSpeechPitchChange = { viewModel.updateSpeechPitch(it) },
+                    onVoiceChange = { viewModel.updateVoiceName(it) },
+                    onPreferredLanguageChange = { viewModel.updatePreferredLanguage(it) },
+                    onAiProviderChange = { viewModel.updateAiProvider(it) },
+                    onWakeWordChange = { viewModel.toggleWakeWord(it) },
+                    onLowPowerChange = { viewModel.updateLowPowerMode(it) },
+                    onAutoSpeakChange = { viewModel.updateAutoSpeak(it) },
+                    onUpdateBossProfile = { name, title, details, nickname ->
+                        viewModel.updateBossProfile(name, title, details, nickname)
+                    },
+                    onClearHistory = { viewModel.clearConversationHistory() },
+                    onDismiss = { showSettingsDialog = false }
+                )
+            }
 
-        if (showPermissionsDialog) {
-            PermissionsDashboardDialog(
-                onRequestPermissions = { requestPermissions() },
-                onDismiss = { showPermissionsDialog = false }
-            )
+            // PERMISSIONS DIALOG
+            if (showPermissionsDialog) {
+                PermissionsDashboardDialog(
+                    onDismiss = { showPermissionsDialog = false },
+                    onRequestPermissions = { requestPermissions() }
+                )
+            }
+
+            // EMERGENCY LOCKDOWN FULLSCREEN OVERLAY
+            if (settings.isLockdownActive) {
+                LockdownSecurityScreen(
+                    onUnlockAttempt = { pin ->
+                        viewModel.unlockFromLockdown(pin)
+                    }
+                )
+            }
         }
     }
 }
 
+@Composable
+fun ScreenShareDialog(
+    onLiveCapture: () -> Unit,
+    onPickScreenshot: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = SophisticatedPanel),
+            border = BorderStroke(1.dp, HudCyanNeon.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(HudCyanNeon.copy(alpha = 0.15f))
+                        .border(1.dp, HudCyanNeon, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ScreenShare,
+                        contentDescription = "Screen Vision",
+                        tint = HudCyanNeon,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Text(
+                    text = "Share Screen with Peter",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                Text(
+                    text = "Peter will visually inspect your screen with Gemini Multimodal AI, answer questions, and perform background searches with proof on demand!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                // Option 1: Live Screen Capture
+                Button(
+                    onClick = onLiveCapture,
+                    colors = ButtonDefaults.buttonColors(containerColor = HudCyanNeon),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("btn_capture_live_screen")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ScreenShare,
+                        contentDescription = "Capture Live Screen",
+                        tint = SophisticatedBlack,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Capture & Analyze Screen",
+                        color = SophisticatedBlack,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Option 2: Choose Screenshot
+                OutlinedButton(
+                    onClick = onPickScreenshot,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HudCyanNeon),
+                    border = BorderStroke(1.dp, SophisticatedBorderLight),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("btn_pick_screenshot")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = "Pick Screenshot",
+                        tint = HudCyanNeon,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Select Screenshot / Image",
+                        color = TextWhite,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Cancel", color = TextMuted)
+                }
+            }
+        }
+    }
+}
