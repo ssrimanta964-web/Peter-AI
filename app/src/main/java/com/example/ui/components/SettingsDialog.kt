@@ -429,6 +429,55 @@ fun SettingsDialog(
                     )
                 }
 
+                // Voice Selection List
+                if (availableVoices.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Active Voice Preset", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        val displayedVoices = availableVoices.take(6)
+                        displayedVoices.forEach { voice ->
+                            val isSelected = settings.voiceName == voice || (settings.voiceName.startsWith("Tom Holland") && voice.startsWith("Tom Holland"))
+                            val friendlyName = when {
+                                voice.contains("Tom Holland") -> "Tom Holland Male (British Young Hero)"
+                                voice.contains("en-gb-x-rjs") -> "British Male (Tom Holland - Energetic)"
+                                voice.contains("en-gb-x-gbd") -> "British Male (Deep Natural)"
+                                voice.contains("en-gb-x-gbb") -> "British Male (Clear Crisp)"
+                                voice.contains("en-us-x-iol") -> "US Male (Warm Natural)"
+                                voice.contains("en-us-x-tpd") -> "US Male (Energetic Hero)"
+                                voice.contains("hi-in") -> "Hindi Indian Voice ($voice)"
+                                voice.contains("bn-in") -> "Bengali Indian Voice ($voice)"
+                                else -> voice
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) SophisticatedCyan.copy(alpha = 0.18f) else SophisticatedCard)
+                                    .border(1.dp, if (isSelected) SophisticatedCyan else SophisticatedBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onVoiceChange(voice) }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = friendlyName,
+                                        color = if (isSelected) SophisticatedCyan else TextWhite,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1
+                                    )
+                                    if (isSelected) {
+                                        Text("ACTIVE", color = SophisticatedCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 2. AI BRAIN SELECTION
                 SettingsSectionHeader(icon = Icons.Default.Psychology, title = "AI BRAIN CORE")
                 val aiModes = listOf("Auto (Gemini + Local)", "Local Only", "Cloud Only")

@@ -79,7 +79,17 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     init {
         initTts(application)
         initSpeechRecognizer(application)
+        initWakeWordDetector(application)
         refreshTelemetry()
+
+        // Auto-start background wake word service if enabled
+        if (preferences.settings.value.wakeWordEnabled) {
+            try {
+                PeterWakeWordService.startService(application)
+            } catch (e: Exception) {
+                // Background start can be deferred until activity is ready
+            }
+        }
     }
 
     private fun initTts(context: Context) {
@@ -88,7 +98,64 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
                 _peterState.value = PeterState.SPEAKING
             } else if (_peterState.value == PeterState.SPEAKING) {
                 _peterState.value = PeterState.IDLE
+                resumeInAppWakeWord()
             }
+        }
+    }
+
+    private fun initWakeWordDetector(context: Context) {
+        inAppWakeWordDetector = PeterWakeWordDetector(context) { detectedPhrase ->
+            viewModelScope.launch(Dispatchers.Main) {
+                if (_peterState.value == PeterState.LISTENING || _peterState.value == PeterState.PROCESSING || _peterState.value == PeterState.THINKING) {
+                    return@launch
+                }
+
+                inAppWakeWordDetector?.stop()
+
+                val cleaned = detectedPhrase.trim()
+                // Check if user spoke a full command with wake word, e.g. "hey peter turn on flashlight"
+                val stripped = cleaned
+                    .replace(Regex("(?i)^(hey|hello|hi|ok|okay|namaste|yo|he|hay|hai|listen|হেই|হ্যালো|শোনো|নমস্কার|হে|सुनो|नमस्ते)?\\s*(peter|piter|pete|pita|pitar|spiderman|spider-man|পিটার|पीटर)\\s*"), "")
+                    .trim()
+
+                if (stripped.isNotBlank() && stripped.length > 2) {
+                    executeUserPrompt(cleaned)
+                } else {
+                    // Just wake word greeted
+                    val lang = com.example.domain.ai.LanguageHelper.detectLanguage(preferences.settings.value.preferredLanguage)
+                    val greet = when (lang) {
+                        com.example.domain.ai.SupportedLanguage.BENGALI -> "হ্যাঁ বস! বলুন আমি শুনছি!"
+                        com.example.domain.ai.SupportedLanguage.HINDI -> "हाँ बॉस! बोलिए, मैं सुन रहा हूँ!"
+                        com.example.domain.ai.SupportedLanguage.ENGLISH -> "Yes Boss! I'm listening mate, what's up?"
+                    }
+                    _statusText.value = greet
+                    if (preferences.settings.value.autoSpeakResponses) {
+                        val s = preferences.settings.value
+                        tts?.speak(greet, s.speechRate, s.speechPitch, s.voiceName, onDone = {
+                            startListening()
+                        })
+                    } else {
+                        // Start active listening directly for the user's command
+                        startListening()
+                    }
+                }
+            }
+        }
+
+        if (preferences.settings.value.wakeWordEnabled) {
+            inAppWakeWordDetector?.startContinuousWakeWordListening()
+        }
+    }
+
+    fun startWakeWordDetection() {
+        if (preferences.settings.value.wakeWordEnabled) {
+            inAppWakeWordDetector?.startContinuousWakeWordListening()
+        }
+    }
+
+    private fun resumeInAppWakeWord() {
+        if (preferences.settings.value.wakeWordEnabled && !(_peterState.value == PeterState.LISTENING || _peterState.value == PeterState.SPEAKING)) {
+            inAppWakeWordDetector?.startContinuousWakeWordListening()
         }
     }
 
@@ -106,12 +173,14 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
                     if (_peterState.value == PeterState.ERROR) {
                         _peterState.value = PeterState.IDLE
                         _statusText.value = "PETER standing by."
+                        resumeInAppWakeWord()
                     }
                 }
             },
             onStateChange = { listening ->
                 if (listening) {
                     tts?.stop()
+                    inAppWakeWordDetector?.stop()
                     _peterState.value = PeterState.LISTENING
                     _statusText.value = "Listening to your voice..."
                 } else if (_peterState.value == PeterState.LISTENING) {
@@ -124,6 +193,7 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startListening() {
         tts?.stop()
+        inAppWakeWordDetector?.stop()
         speechRecognizer?.startListening(settings.value.preferredLanguage)
     }
 
@@ -352,8 +422,14 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         preferences.updateWakeWordEnabled(enabled)
         val context = getApplication<Application>()
         if (enabled) {
-            PeterWakeWordService.startService(context)
+            inAppWakeWordDetector?.startContinuousWakeWordListening()
+            try {
+                PeterWakeWordService.startService(context)
+            } catch (e: Exception) {
+                // Ignore service start if in restricted state
+            }
         } else {
+            inAppWakeWordDetector?.stop()
             PeterWakeWordService.stopService(context)
         }
     }

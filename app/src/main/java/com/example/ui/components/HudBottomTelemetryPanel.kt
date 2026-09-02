@@ -113,15 +113,15 @@ fun HudBottomTelemetryPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .background(HudBgDark.copy(alpha = 0.92f))
+                .height(36.dp)
+                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                .background(HudBgDark.copy(alpha = 0.94f))
                 .border(
                     width = 1.dp,
                     color = HudPanelBorder,
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                    shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
                 )
-                .padding(horizontal = 14.dp, vertical = 2.dp)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -130,28 +130,28 @@ fun HudBottomTelemetryPanel(
             ) {
                 // Left: NET DOWNLOAD & Spectrum Waveform
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
-                            text = "NET DOWNLOAD",
+                            text = "DOWNLOAD",
                             color = HudTextCyan,
-                            fontSize = 8.sp,
+                            fontSize = 7.5.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "239.97 M-IN",
+                            text = "239.97 M",
                             color = HudTextDim,
-                            fontSize = 7.sp,
+                            fontSize = 6.5.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
 
                     // Spectrum Bars Canvas
-                    Canvas(modifier = Modifier.width(64.dp).height(24.dp)) {
-                        val barCount = 14
+                    Canvas(modifier = Modifier.width(44.dp).height(18.dp)) {
+                        val barCount = 10
                         val barWidth = size.width / (barCount * 1.6f)
                         for (i in 0 until barCount) {
                             val hFraction = (0.2f + 0.8f * sin(spectrumWave * 3.14f + i * 0.45).toFloat()).coerceIn(0.15f, 1f)
@@ -168,14 +168,14 @@ fun HudBottomTelemetryPanel(
 
                 // Center: Holographic Spinning Wireframe Globe & Speed Readout
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable(onClick = onStatusClick)
                 ) {
                     Text(
-                        text = "0.0 - SPEED",
+                        text = "0.0 SPD",
                         color = HudCyanNeon,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -183,7 +183,7 @@ fun HudBottomTelemetryPanel(
                     // Spinning Holographic Globe Core
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(24.dp)
                             .clip(CircleShape)
                             .background(HudPanelBg)
                             .border(1.dp, HudCyanNeon, CircleShape),
@@ -193,14 +193,14 @@ fun HudBottomTelemetryPanel(
                             imageVector = Icons.Default.Language,
                             contentDescription = "Holographic Globe",
                             tint = HudCyanNeon,
-                            modifier = Modifier.size(18.dp).rotate(globeRotation)
+                            modifier = Modifier.size(15.dp).rotate(globeRotation)
                         )
                     }
 
                     Text(
-                        text = "SPEED - 0.0",
+                        text = "SPD 0.0",
                         color = HudCyanNeon,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -208,12 +208,12 @@ fun HudBottomTelemetryPanel(
 
                 // Right: NET UPLOAD & Spectrum Waveform
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Spectrum Bars Canvas Right
-                    Canvas(modifier = Modifier.width(64.dp).height(24.dp)) {
-                        val barCount = 14
+                    Canvas(modifier = Modifier.width(44.dp).height(18.dp)) {
+                        val barCount = 10
                         val barWidth = size.width / (barCount * 1.6f)
                         for (i in 0 until barCount) {
                             val hFraction = (0.2f + 0.8f * cos(spectrumWave * 3.14f + i * 0.45).toFloat()).coerceIn(0.15f, 1f)
@@ -229,16 +229,16 @@ fun HudBottomTelemetryPanel(
 
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "NET UPLOAD",
+                            text = "UPLOAD",
                             color = HudTextCyan,
-                            fontSize = 8.sp,
+                            fontSize = 7.5.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "OUT - 44.38 M",
+                            text = "44.38 M",
                             color = HudTextDim,
-                            fontSize = 7.sp,
+                            fontSize = 6.5.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -250,7 +250,7 @@ fun HudBottomTelemetryPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(20.dp)
+                .height(18.dp)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -260,7 +260,7 @@ fun HudBottomTelemetryPanel(
                     )
                 )
                 .border(0.5.dp, HudPanelBorder)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -270,19 +270,20 @@ fun HudBottomTelemetryPanel(
             ) {
                 // Left start badge
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(12.dp)
+                            .size(8.dp)
                             .clip(CircleShape)
                             .background(HudCyanNeon)
                     )
                     Text(
-                        text = statusMessage.take(45),
+                        text = statusMessage.take(55),
                         color = TextWhite,
-                        fontSize = 8.sp,
+                        fontSize = 7.5.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                         maxLines = 1
@@ -291,25 +292,25 @@ fun HudBottomTelemetryPanel(
 
                 // Right Tray (Wi-Fi, Volume, Short Time)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = if (networkStatus.isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
                         contentDescription = "Wi-Fi",
                         tint = if (networkStatus.isConnected) HudCyanNeon else HudTextDim,
-                        modifier = Modifier.size(10.dp)
+                        modifier = Modifier.size(9.dp)
                     )
                     Icon(
                         imageVector = Icons.Default.VolumeUp,
                         contentDescription = "Audio",
                         tint = HudTextCyan,
-                        modifier = Modifier.size(10.dp)
+                        modifier = Modifier.size(9.dp)
                     )
                     Text(
-                        text = currentTimeShort.ifBlank { "15:08" },
+                        text = currentTimeShort.ifBlank { "12:00" },
                         color = HudCyanNeon,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )

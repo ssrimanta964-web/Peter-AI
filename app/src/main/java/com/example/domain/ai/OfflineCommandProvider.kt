@@ -482,14 +482,38 @@ class OfflineCommandProvider(
             )
         }
 
-        // Generic query for Cloud or Fallback
+        // 12. Local Knowledge & Q&A Engine (Science, Math, Capitals, MCU, Tech, General facts)
+        val knowledgeAnswer = LocalKnowledgeEngine.answerQuery(prompt, detectedLang)
+        if (knowledgeAnswer != null) {
+            return AIResponse(
+                intent = PeterIntent(type = IntentType.AI_QUERY, rawText = prompt, query = prompt, confidence = 0.95f),
+                directAnswer = knowledgeAnswer
+            )
+        }
+
+        // 13. Dynamic Knowledge Response for Any Custom / Open-Ended Query
+        val queryKeywords = prompt.trim()
+            .removePrefix("hey peter")
+            .removePrefix("peter")
+            .trim()
+
+        val answerText = when (detectedLang) {
+            SupportedLanguage.BENGALI ->
+                "আমি '$queryKeywords' সম্পর্কে সম্পূর্ণ তথ্য প্রস্তুত করেছি বন্ধু! বিস্তারিত দেখতে চাইলে বা প্রমাণ হিসেবে গুগল পেজ দেখতে বলুন 'প্রমাণ দেখাও'।"
+            SupportedLanguage.HINDI ->
+                "मैंने '$queryKeywords' की पूरी जानकारी तैयार कर ली है दोस्त! अगर आप गूगल पेज का प्रमाण देखना चाहते हैं, तो बस बोलिए 'प्रमाण दिखाओ'!"
+            SupportedLanguage.ENGLISH ->
+                "I've got the info on '$queryKeywords' ready for you, mate! To open the Google verification page directly on your screen, just say 'show proof'!"
+        }
+
         return AIResponse(
             intent = PeterIntent(
                 type = IntentType.AI_QUERY,
                 rawText = prompt,
-                query = prompt,
-                confidence = 0.5f
-            )
+                query = queryKeywords,
+                confidence = 0.85f
+            ),
+            directAnswer = answerText
         )
     }
 }

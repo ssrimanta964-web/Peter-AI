@@ -8,11 +8,11 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class PeterSettings(
     val speechRate: Float = 1.08f,
-    val speechPitch: Float = 1.12f,
-    val voiceName: String = "Tom Holland Male (Default)",
+    val speechPitch: Float = 1.02f,
+    val voiceName: String = "Tom Holland Male (British)",
     val preferredLanguage: String = "Auto Detect (English, Hindi, Bengali)", // "Auto Detect (English, Hindi, Bengali)", "English", "Hindi (हिन्दी)", "Bengali (বাংলা)"
     val aiProvider: String = "Auto (Gemini + Local)", // "Auto (Gemini + Local)", "Local Only", "Cloud Only"
-    val wakeWordEnabled: Boolean = false,
+    val wakeWordEnabled: Boolean = true,
     val lowPowerMode: Boolean = false,
     val animationQuality: String = "High", // "High", "Medium", "Low"
     val autoSpeakResponses: Boolean = true,
@@ -32,11 +32,11 @@ class PeterPreferences(context: Context) {
     private fun loadSettings(): PeterSettings {
         return PeterSettings(
             speechRate = prefs.getFloat(KEY_SPEECH_RATE, 1.08f),
-            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.12f),
-            voiceName = prefs.getString(KEY_VOICE_NAME, "Tom Holland Male (Default)") ?: "Tom Holland Male (Default)",
+            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.02f),
+            voiceName = prefs.getString(KEY_VOICE_NAME, "Tom Holland Male (British)") ?: "Tom Holland Male (British)",
             preferredLanguage = prefs.getString(KEY_LANGUAGE, "Auto Detect (English, Hindi, Bengali)") ?: "Auto Detect (English, Hindi, Bengali)",
             aiProvider = prefs.getString(KEY_AI_PROVIDER, "Auto (Gemini + Local)") ?: "Auto (Gemini + Local)",
-            wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD, false),
+            wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD, true),
             lowPowerMode = prefs.getBoolean(KEY_LOW_POWER, false),
             animationQuality = prefs.getString(KEY_ANIM_QUALITY, "High") ?: "High",
             autoSpeakResponses = prefs.getBoolean(KEY_AUTO_SPEAK, true),

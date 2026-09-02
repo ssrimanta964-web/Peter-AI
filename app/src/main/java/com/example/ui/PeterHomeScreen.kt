@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.core.model.PeterState
 import com.example.ui.components.HudArcReactorCore
 import com.example.ui.components.HudBottomTelemetryPanel
+import com.example.ui.components.HudCommandInputBar
 import com.example.ui.components.HudConversationOverlay
 import com.example.ui.components.HudLeftDockPanel
 import com.example.ui.components.HudRightDockPanel
@@ -127,6 +129,16 @@ fun PeterHomeScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.refreshTelemetry()
+        val hasMic = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasMic) {
+            viewModel.startWakeWordDetection()
+            if (settings.wakeWordEnabled) {
+                viewModel.toggleWakeWord(true)
+            }
+        }
     }
 
     val requestPermissions = {
@@ -138,6 +150,19 @@ fun PeterHomeScreen(
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         permissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    // Proactively request microphone permission on initial launch & start wake word if already granted
+    LaunchedEffect(Unit) {
+        val hasMic = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasMic) {
+            requestPermissions()
+        } else {
+            viewModel.startWakeWordDetection()
+        }
     }
 
     val onMicTrigger = {
@@ -162,7 +187,7 @@ fun PeterHomeScreen(
             .background(HudBgDark)
             .imePadding(),
         containerColor = HudBgDark,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -177,8 +202,7 @@ fun PeterHomeScreen(
                         radius = 1200f
                     )
                 )
-                .padding(WindowInsets.statusBars.asPaddingValues())
-                .padding(WindowInsets.navigationBars.asPaddingValues())
+                .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             // MAIN LANDSCAPE SCI-FI HUD LAYOUT
             Column(
@@ -195,15 +219,15 @@ fun PeterHomeScreen(
                         viewModel.toggleWakeWord(!settings.wakeWordEnabled)
                     },
                     onRefreshTelemetry = { viewModel.refreshTelemetry() },
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                 )
 
                 // 2. MIDDLE ROW (Left Dock + Center Arc Reactor Core + Right Dock)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .weight(1f, fill = true)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -252,12 +276,22 @@ fun PeterHomeScreen(
                     )
                 }
 
-                // 3. BOTTOM TELEMETRY PANEL (Network Download/Upload Spectrum, Holographic Globe, OS Tray)
+                // 3. COMMAND INPUT & TYPING SECTION
+                HudCommandInputBar(
+                    onSendCommand = { prompt ->
+                        viewModel.executeUserPrompt(prompt)
+                    },
+                    onMicClick = onMicTrigger,
+                    isListening = isListening,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+
+                // 4. BOTTOM TELEMETRY PANEL (Network Download/Upload Spectrum, Holographic Globe, OS Tray)
                 HudBottomTelemetryPanel(
                     networkStatus = network,
                     statusMessage = statusText,
                     onStatusClick = { showConversationOverlay = true },
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                 )
             }
 

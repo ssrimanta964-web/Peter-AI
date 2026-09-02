@@ -4,6 +4,7 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,11 @@ class PeterTextToSpeech(
     private val context: Context,
     private val onSpeakingStateChanged: (Boolean) -> Unit
 ) : TextToSpeech.OnInitListener {
+
+    companion object {
+        private const val TAG = "PeterTTS"
+        const val DEFAULT_TOM_HOLLAND_VOICE = "Tom Holland Male (British)"
+    }
 
     private var tts: TextToSpeech? = null
     private var isInitialized = false
@@ -24,13 +30,20 @@ class PeterTextToSpeech(
     val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
 
     private var pendingSpeechText: String? = null
-    private var targetRate: Float = 1.06f
-    private var targetPitch: Float = 1.10f
-    private var targetVoiceName: String = "Tom Holland Male (Default)"
+    private var targetRate: Float = 1.08f
+    private var targetPitch: Float = 1.02f
+    private var targetVoiceName: String = DEFAULT_TOM_HOLLAND_VOICE
 
     init {
-        tts = TextToSpeech(context.applicationContext, this)
+        // Prefer Google TTS engine for highest quality natural neural male voices, fallback to default
+        try {
+            tts = TextToSpeech(context.applicationContext, this, "com.google.android.tts")
+        } catch (e: Exception) {
+            tts = TextToSpeech(context.applicationContext, this)
+        }
     }
+
+    private var currentOnDoneCallback: (() -> Unit)? = null
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
@@ -41,15 +54,18 @@ class PeterTextToSpeech(
                 isInitialized = true
             }
             
-            // Query available voices and prioritize young British male (Tom Holland accent)
+            // Query available voices and strictly prioritize Tom Holland British young male voices
             val allVoices = tts?.voices?.toList() ?: emptyList()
-            val maleVoices = allVoices.filter { isMaleVoice(it) }.sortedByDescending { voiceScore(it) }.map { it.name }
-            val otherVoices = allVoices.filter { !isMaleVoice(it) }.map { it.name }
+            val maleVoices = allVoices.filter { isMaleVoice(it) }.sortedByDescending { tomHollandScore(it) }
+            val otherVoices = allVoices.filter { !isMaleVoice(it) }
 
-            _availableVoices.value = listOf("Tom Holland Male (Default)") + maleVoices + otherVoices
+            val voiceList = mutableListOf(DEFAULT_TOM_HOLLAND_VOICE)
+            maleVoices.forEach { voiceList.add(it.name) }
+            otherVoices.forEach { voiceList.add(it.name) }
+            _availableVoices.value = voiceList
 
-            // Apply best Tom Holland-like voice initially
-            applyMaleVoice()
+            // Apply best Tom Holland-like voice immediately
+            applyTomHollandMaleVoice()
 
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
@@ -60,12 +76,18 @@ class PeterTextToSpeech(
                 override fun onDone(utteranceId: String?) {
                     _isSpeaking.value = false
                     onSpeakingStateChanged(false)
+                    val callback = currentOnDoneCallback
+                    currentOnDoneCallback = null
+                    callback?.invoke()
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
                     _isSpeaking.value = false
                     onSpeakingStateChanged(false)
+                    val callback = currentOnDoneCallback
+                    currentOnDoneCallback = null
+                    callback?.invoke()
                 }
             })
 
@@ -115,82 +137,137 @@ class PeterTextToSpeech(
         return text
     }
 
-    private fun applyVoiceForLanguage(langCode: String) {
-        tts?.let { engine ->
-            val allVoices = engine.voices ?: return
-            when (langCode) {
-                "hi" -> {
-                    engine.setLanguage(Locale.Builder().setLanguage("hi").setRegion("IN").build())
-                    val hiVoice = allVoices.firstOrNull { v ->
-                        val n = v.name.lowercase(Locale.ROOT)
-                        (v.locale.language == "hi" || n.contains("hi-in") || n.contains("hin")) &&
-                                (n.contains("male") || n.contains("-m-") || !n.contains("female"))
-                    } ?: allVoices.firstOrNull { it.locale.language == "hi" }
-                    if (hiVoice != null) engine.voice = hiVoice
-                }
-                "bn" -> {
-                    engine.setLanguage(Locale.Builder().setLanguage("bn").setRegion("IN").build())
-                    val bnVoice = allVoices.firstOrNull { v ->
-                        val n = v.name.lowercase(Locale.ROOT)
-                        (v.locale.language == "bn" || n.contains("bn-in") || n.contains("bn-bd") || n.contains("ben")) &&
-                                (n.contains("male") || n.contains("-m-") || !n.contains("female"))
-                    } ?: allVoices.firstOrNull { it.locale.language == "bn" }
-                    if (bnVoice != null) engine.voice = bnVoice
-                }
-                else -> {
-                    engine.setLanguage(Locale.UK)
-                    applyMaleVoice()
-                }
-            }
-        }
-    }
-
-    private fun voiceScore(voice: Voice): Int {
+    private fun isExplicitlyFemale(voice: Voice): Boolean {
         val name = voice.name.lowercase(Locale.ROOT)
-        var score = 0
-        // Tom Holland British natural tone prioritization (UK English young male)
-        if (voice.locale.country.equals("GB", ignoreCase = true) || voice.locale.language.equals("en_GB", ignoreCase = true) || name.contains("en-gb")) score += 70
-        if (name.contains("en-gb-x-rjs") || name.contains("en-gb-x-gbd") || name.contains("en-gb-x-gbb") || name.contains("en-gb-language")) score += 50
-        if (name.contains("neural") || name.contains("wavenet") || name.contains("natural") || name.contains("high-quality")) score += 40
-        if (name.contains("male") || name.contains("-m-")) score += 30
-        if (name.contains("en-us-x-iol") || name.contains("en-us-x-tpd")) score += 20
-        if (voice.quality == Voice.QUALITY_VERY_HIGH || voice.quality == Voice.QUALITY_HIGH) score += 25
-        if (voice.latency == Voice.LATENCY_VERY_LOW || voice.latency == Voice.LATENCY_LOW) score += 10
-        return score
+        val features = voice.features?.map { it.lowercase(Locale.ROOT) } ?: emptyList()
+
+        if (features.any { it.contains("female") || it.contains("gender=2") || it.contains("gender=female") }) return true
+        if (name.contains("female") || name.contains("#female") || name.contains("-f-") || name.contains("_female") || name.contains("woman")) return true
+
+        // Known Android Google TTS & Samsung female voice identifiers
+        val femaleCodes = listOf(
+            "en-gb-x-gba", "en-gb-x-gbc", "en-gb-x-gbe", "en-gb-x-gbf", "en-gb-x-gbg", "en-gb-x-fis",
+            "en-us-x-tpf", "en-us-x-iob", "en-us-x-iog", "en-us-x-tpe", "en-us-x-iof", "en-us-x-sfg",
+            "en-au-x-aua", "en-au-x-auc",
+            "en-in-x-cfa", "en-in-x-cfb",
+            "hi-in-x-hia", "hi-in-x-hib", "hi-in-x-cfa", "hi-in-x-cfb",
+            "bn-in-x-bna", "bn-in-x-bnb", "bn-bd-x-bda", "bn-bd-x-bdb"
+        )
+        return femaleCodes.any { name.contains(it) }
     }
 
     private fun isMaleVoice(voice: Voice): Boolean {
+        if (isExplicitlyFemale(voice)) return false
         val name = voice.name.lowercase(Locale.ROOT)
-        // Check for common Android / Google TTS female identifiers
-        val isExplicitFemale = name.contains("female") || name.contains("-f-") || name.contains("woman") || 
-                name.contains("en-us-x-tpf") || name.contains("en-us-x-iob") || name.contains("en-us-x-sfg#female") ||
-                name.contains("en-gb-x-gba") || name.contains("en-gb-x-gbc") || name.contains("en-gb-x-fis")
-        if (isExplicitFemale) return false
+        val features = voice.features?.map { it.lowercase(Locale.ROOT) } ?: emptyList()
 
-        val isExplicitMale = name.contains("male") || name.contains("-m-") || name.contains("man") || 
-                name.contains("en-us-x-iol") || name.contains("en-us-x-tpd") || name.contains("en-gb-x-rjs") || 
-                name.contains("en-gb-x-gbd") || name.contains("en-gb-x-gbb") || name.contains("en-in-x-cfl") || name.contains("en-au-x-aub")
-        
-        return isExplicitMale || (!isExplicitFemale && voice.locale.language == "en")
+        if (features.any { it.contains("male") || it.contains("gender=1") || it.contains("gender=male") }) return true
+        if (name.contains("male") || name.contains("#male") || name.contains("-m-") || name.contains("_male") || name.contains("man")) return true
+
+        // Known Android Google TTS male voice identifiers
+        val maleCodes = listOf(
+            "en-gb-x-rjs", "en-gb-x-gbd", "en-gb-x-gbb", "en-gb-x-rpj", "en-gb-x-rpk",
+            "en-us-x-iol", "en-us-x-tpd", "en-us-x-iom", "en-us-x-tpc",
+            "en-au-x-aub", "en-au-x-aud",
+            "en-in-x-cfl", "en-in-x-cfd",
+            "hi-in-x-hie", "hi-in-x-hid", "hi-in-x-hic", "hi-in-x-cfc", "hi-in-x-cfd",
+            "bn-in-x-bnc", "bn-in-x-bnd", "bn-bd-x-ban"
+        )
+        return maleCodes.any { name.contains(it) }
     }
 
-    private fun applyMaleVoice() {
-        tts?.let { engine ->
-            val allVoices = engine.voices ?: return
-            // Find highest scored young male voice (UK / British young male prioritized for Tom Holland)
-            val bestVoice = allVoices.filter { isMaleVoice(it) }.maxByOrNull { voiceScore(it) }
-                ?: allVoices.firstOrNull { isMaleVoice(it) }
+    private fun tomHollandScore(voice: Voice): Int {
+        if (isExplicitlyFemale(voice)) return -1000
+        val name = voice.name.lowercase(Locale.ROOT)
+        var score = 0
 
-            if (bestVoice != null) {
-                engine.voice = bestVoice
+        // #1 Top priority: British young male voices (Tom Holland soundalike)
+        if (name.contains("en-gb-x-rjs")) score += 500
+        if (name.contains("en-gb-x-gbd")) score += 450
+        if (name.contains("en-gb-x-gbb")) score += 400
+        if (name.contains("en-gb-x-rpj")) score += 350
+
+        // General British English male
+        if ((voice.locale.country.equals("GB", ignoreCase = true) || voice.locale.language.equals("en_GB", ignoreCase = true) || name.contains("en-gb")) && isMaleVoice(voice)) {
+            score += 250
+        }
+
+        // US Male natural neural fallback
+        if (name.contains("en-us-x-iol") || name.contains("en-us-x-tpd") || name.contains("en-us-x-iom")) score += 150
+        if (isMaleVoice(voice)) score += 100
+
+        if (voice.quality == Voice.QUALITY_VERY_HIGH) score += 50
+        if (voice.quality == Voice.QUALITY_HIGH) score += 30
+        if (name.contains("neural") || name.contains("wavenet") || name.contains("natural")) score += 40
+
+        return score
+    }
+
+    private fun applyTomHollandMaleVoice() {
+        tts?.let { engine ->
+            val allVoices = engine.voices?.toList() ?: return
+            
+            // 1. Strict search: pick the highest scored British male voice
+            val bestTomHollandVoice = allVoices
+                .filter { isMaleVoice(it) }
+                .maxByOrNull { tomHollandScore(it) }
+
+            if (bestTomHollandVoice != null) {
+                Log.d(TAG, "Selected Tom Holland voice: ${bestTomHollandVoice.name}")
+                engine.voice = bestTomHollandVoice
+                return
+            }
+
+            // 2. Fallback: Any English male voice
+            val anyEnglishMale = allVoices.firstOrNull { it.locale.language == "en" && isMaleVoice(it) }
+            if (anyEnglishMale != null) {
+                engine.voice = anyEnglishMale
+                return
+            }
+
+            // 3. Fallback: Set UK language
+            engine.setLanguage(Locale.UK)
+        }
+    }
+
+    private fun applyVoiceForLanguage(langCode: String) {
+        tts?.let { engine ->
+            val allVoices = engine.voices?.toList() ?: return
+            when (langCode) {
+                "hi" -> {
+                    engine.setLanguage(Locale.Builder().setLanguage("hi").setRegion("IN").build())
+                    val hiMaleVoice = allVoices.firstOrNull { v ->
+                        val n = v.name.lowercase(Locale.ROOT)
+                        (v.locale.language == "hi" || n.contains("hi-in") || n.contains("hin")) && isMaleVoice(v)
+                    } ?: allVoices.firstOrNull { it.locale.language == "hi" && !isExplicitlyFemale(it) }
+                    if (hiMaleVoice != null) engine.voice = hiMaleVoice
+                }
+                "bn" -> {
+                    engine.setLanguage(Locale.Builder().setLanguage("bn").setRegion("IN").build())
+                    val bnMaleVoice = allVoices.firstOrNull { v ->
+                        val n = v.name.lowercase(Locale.ROOT)
+                        (v.locale.language == "bn" || n.contains("bn-in") || n.contains("bn-bd") || n.contains("ben")) && isMaleVoice(v)
+                    } ?: allVoices.firstOrNull { it.locale.language == "bn" && !isExplicitlyFemale(it) }
+                    if (bnMaleVoice != null) engine.voice = bnMaleVoice
+                }
+                else -> {
+                    applyTomHollandMaleVoice()
+                }
             }
         }
     }
 
-    fun speak(text: String, rate: Float = 1.06f, pitch: Float = 1.10f, voiceName: String = "Tom Holland Male (Default)") {
+    fun speak(
+        text: String,
+        rate: Float = 1.08f,
+        pitch: Float = 1.02f,
+        voiceName: String = DEFAULT_TOM_HOLLAND_VOICE,
+        onDone: (() -> Unit)? = null
+    ) {
         targetRate = rate
         targetPitch = pitch
         targetVoiceName = voiceName
+        currentOnDoneCallback = onDone
 
         if (!isInitialized) {
             pendingSpeechText = text
@@ -200,19 +277,23 @@ class PeterTextToSpeech(
         tts?.let { engine ->
             val processedText = preprocessTextForNaturalSpeech(text)
 
-            // Dynamic Pitch Modulation for Laughter & Excitement (Tom Holland higher energetic inflection)
+            // Dynamic Pitch & Energy Modulation for Laughter & Excitement (Tom Holland higher energetic inflection)
             val containsHumorOrLaugh = processedText.contains("Haha", ignoreCase = true) ||
                     processedText.contains("Hehe", ignoreCase = true) ||
                     processedText.contains("!", ignoreCase = true)
             
-            val adjustedPitch = if (containsHumorOrLaugh) (pitch * 1.04f).coerceAtMost(1.35f) else pitch
-            val adjustedRate = if (containsHumorOrLaugh) (rate * 1.02f).coerceAtMost(1.30f) else rate
+            val adjustedPitch = if (containsHumorOrLaugh) (pitch * 1.04f).coerceAtMost(1.25f) else pitch
+            val adjustedRate = if (containsHumorOrLaugh) (rate * 1.02f).coerceAtMost(1.25f) else rate
 
             engine.setSpeechRate(adjustedRate)
             engine.setPitch(adjustedPitch)
 
             val detectedLang = detectLanguage(processedText)
-            if (voiceName != "Tom Holland Male (Default)" && voiceName != "Spider-Man Male (Default)" && voiceName != "Default") {
+            if (voiceName != DEFAULT_TOM_HOLLAND_VOICE &&
+                voiceName != "Tom Holland Male (Default)" &&
+                voiceName != "Spider-Man Male (Default)" &&
+                voiceName != "Default"
+            ) {
                 val matchedVoice = engine.voices?.firstOrNull { it.name == voiceName }
                 if (matchedVoice != null) {
                     engine.voice = matchedVoice
@@ -236,9 +317,10 @@ class PeterTextToSpeech(
     }
 
     fun shutdown() {
-        stop()
+        tts?.stop()
         tts?.shutdown()
         tts = null
         isInitialized = false
     }
 }
+

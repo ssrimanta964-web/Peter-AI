@@ -154,7 +154,7 @@ fun HudArcReactorCore(
         // Futuristic Arc Reactor Hologram
         Box(
             modifier = Modifier
-                .size(240.dp)
+                .size(200.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
