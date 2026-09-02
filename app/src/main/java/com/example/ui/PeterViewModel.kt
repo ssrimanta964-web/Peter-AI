@@ -69,18 +69,16 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     // Voice Engine components
     private var speechRecognizer: PeterSpeechRecognizer? = null
     private var tts: PeterTextToSpeech? = null
-    private var inAppWakeWordDetector: PeterWakeWordDetector? = null
     private var geminiLiveClient: com.example.domain.ai.GeminiLiveClient? = null
 
     val rmsLevel: StateFlow<Float> get() = speechRecognizer?.rmsLevel ?: MutableStateFlow(0f)
-    val isListening: StateFlow<Boolean> get() = geminiLiveClient?.isActive ?: MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> get() = speechRecognizer?.isListening ?: MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> get() = tts?.isSpeaking ?: MutableStateFlow(false)
     val availableVoices: StateFlow<List<String>> get() = tts?.availableVoices ?: MutableStateFlow(listOf("Default"))
 
     init {
         initTts(application)
         initSpeechRecognizer(application)
-        initWakeWordDetector(application)
         initLiveClient()
         refreshTelemetry()
 
@@ -104,55 +102,9 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-
-    private fun initWakeWordDetector(context: Context) {
-        inAppWakeWordDetector = PeterWakeWordDetector(context) { detectedPhrase ->
-            viewModelScope.launch(Dispatchers.Main) {
-                if (_peterState.value == PeterState.LISTENING || _peterState.value == PeterState.PROCESSING || _peterState.value == PeterState.THINKING) {
-                    return@launch
-                }
-
-                inAppWakeWordDetector?.stop()
-
-                val cleaned = detectedPhrase.trim()
-                // Check if user spoke a full command with wake word, e.g. "hey peter turn on flashlight"
-                val stripped = cleaned
-                    .replace(Regex("(?i)^(hey|hello|hi|ok|okay|namaste|yo|he|hay|hai|listen|হেই|হ্যালো|শোনো|নমস্কার|হে|सुनो|नमस्ते)?\\s*(peter|piter|pete|pita|pitar|spiderman|spider-man|পিটার|पीटर)\\s*"), "")
-                    .trim()
-
-                if (stripped.isNotBlank() && stripped.length > 2) {
-                    executeUserPrompt(cleaned)
-                } else {
-                    // Just wake word greeted
-                    val lang = com.example.domain.ai.LanguageHelper.detectLanguage(preferences.settings.value.preferredLanguage)
-                    val greet = when (lang) {
-                        com.example.domain.ai.SupportedLanguage.BENGALI -> "হ্যাঁ বস! বলুন আমি শুনছি!"
-                        com.example.domain.ai.SupportedLanguage.HINDI -> "हाँ बॉस! बोलिए, मैं सुन रहा हूँ!"
-                        com.example.domain.ai.SupportedLanguage.ENGLISH -> "Yes Boss! I'm listening mate, what's up?"
-                    }
-                    _statusText.value = greet
-                    if (preferences.settings.value.autoSpeakResponses) {
-                        val s = preferences.settings.value
-                        tts?.speak(greet, s.speechRate, s.speechPitch, s.voiceName, onDone = {
-                            startListening()
-                        })
-                    } else {
-                        // Start active listening directly for the user's command
-                        startListening()
-                    }
-                }
-            }
-        }
-
-        if (preferences.settings.value.wakeWordEnabled) {
-            inAppWakeWordDetector?.startContinuousWakeWordListening()
-        }
-    }
-
     fun startWakeWordDetection() {
-        if (preferences.settings.value.wakeWordEnabled) {
-            inAppWakeWordDetector?.startContinuousWakeWordListening()
-        }
+        val restartIntent = android.content.Intent("com.example.ACTION_RESTART_WAKE_WORD").apply { setPackage(getApplication<android.app.Application>().packageName) }
+        getApplication<android.app.Application>().sendBroadcast(restartIntent)
     }
 
     private fun resumeInAppWakeWord() {
@@ -180,7 +132,6 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
             onStateChange = { listening ->
                 if (listening) {
                     tts?.stop()
-                    inAppWakeWordDetector?.stop()
                     _peterState.value = PeterState.LISTENING
                     _statusText.value = "Listening to your voice..."
                 } else if (_peterState.value == PeterState.LISTENING) {
@@ -221,14 +172,25 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun startListening() {
+    fun startListening(greeting: String? = null) {
         tts?.stop()
-        inAppWakeWordDetector?.stop()
         
-        // Start Live Session instead of standard recognizer
-        geminiLiveClient?.startLiveSession()
-        
-        // speechRecognizer?.startListening(settings.value.preferredLanguage)
+        if (greeting != null) {
+            tts?.speak(greeting, settings.value.speechRate, settings.value.speechPitch, settings.value.voiceName)
+        }
+
+        val pauseIntent = android.content.Intent("com.example.ACTION_PAUSE_WAKE_WORD").apply { setPackage(getApplication<android.app.Application>().packageName) }
+        getApplication<android.app.Application>().sendBroadcast(pauseIntent)
+
+        speechRecognizer?.cancel() // Clear any busy state
+        viewModelScope.launch {
+            if (greeting != null) {
+                kotlinx.coroutines.delay(1500) // Give TTS time to speak
+            } else {
+                kotlinx.coroutines.delay(1200) // Normal mic release delay
+            }
+            speechRecognizer?.startListening(settings.value.preferredLanguage)
+        }
     }
 
     fun updatePreferredLanguage(language: String) {
@@ -240,12 +202,13 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopListening() {
-        // speechRecognizer?.stopListening()
-        geminiLiveClient?.stopLiveSession()
+        speechRecognizer?.stopListening()
         if (_peterState.value == PeterState.LISTENING) {
             _peterState.value = PeterState.IDLE
             _statusText.value = "Listening cancelled."
         }
+        val restartIntent = android.content.Intent("com.example.ACTION_RESTART_WAKE_WORD").apply { setPackage(getApplication<android.app.Application>().packageName) }
+        getApplication<android.app.Application>().sendBroadcast(restartIntent)
     }
 
     fun stopSpeaking() {
@@ -478,19 +441,20 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         _networkStatus.value = deviceController.getNetworkInfo()
         _volumeStatus.value = deviceController.adjustVolume(0)
     }
-
     fun toggleWakeWord(enabled: Boolean) {
         preferences.updateWakeWordEnabled(enabled)
         val context = getApplication<Application>()
         if (enabled) {
-            inAppWakeWordDetector?.startContinuousWakeWordListening()
             try {
                 PeterWakeWordService.startService(context)
+                val restartIntent = android.content.Intent("com.example.ACTION_RESTART_WAKE_WORD").apply { setPackage(context.packageName) }
+                context.sendBroadcast(restartIntent)
             } catch (e: Exception) {
                 // Ignore service start if in restricted state
             }
         } else {
-            inAppWakeWordDetector?.stop()
+            val pauseIntent = android.content.Intent("com.example.ACTION_PAUSE_WAKE_WORD").apply { setPackage(context.packageName) }
+            context.sendBroadcast(pauseIntent)
             PeterWakeWordService.stopService(context)
         }
     }
@@ -541,7 +505,6 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         speechRecognizer?.stopListening()
         tts?.shutdown()
-        inAppWakeWordDetector?.stop()
         geminiLiveClient?.destroy()
         super.onCleared()
     }

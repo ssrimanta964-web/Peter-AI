@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                     .trim()
                 
                 if (stripped.isBlank() || stripped.length <= 2) {
-                    viewModel.startListening()
+                    viewModel.startListening("Yes boss?")
                 } else {
                     viewModel.executeUserPrompt(detectedText)
                 }
@@ -101,8 +101,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    companion object {
+        var isForeground = false
+    }
+    
     override fun onResume() {
         super.onResume()
+        isForeground = true
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(wakeWordReceiver, android.content.IntentFilter("com.example.WAKE_WORD_DETECTED"), android.content.Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -112,6 +117,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        isForeground = false
         try {
             unregisterReceiver(wakeWordReceiver)
         } catch (e: Exception) {}

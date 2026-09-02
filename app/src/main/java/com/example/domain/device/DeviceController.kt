@@ -38,6 +38,11 @@ interface DeviceController {
     fun isDeviceAdminActive(): Boolean
     fun getDeviceAdminPromptIntent(): Intent
     fun executeHardwareLock(): Boolean
+    fun callContact(nameOrNumber: String): Result<String>
+    fun sendSms(contact: String, message: String): Result<String>
+    fun navigateTo(destination: String): Result<String>
+    fun createEvent(title: String, location: String): Result<String>
+    fun playMusic(songOrArtist: String): Result<String>
 }
 
 data class BatteryStatus(
@@ -403,5 +408,94 @@ class AndroidDeviceController(private val context: Context) : DeviceController {
 
     override fun executeHardwareLock(): Boolean {
         return com.example.receiver.PeterDeviceAdminReceiver.lockEntireDevice(context)
+    }
+
+    override fun callContact(nameOrNumber: String): Result<String> {
+        return try {
+            val intent = Intent(Intent.ACTION_DIAL).apply {
+                data = Uri.parse("tel:${Uri.encode(nameOrNumber)}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Opened dialer for $nameOrNumber")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun sendSms(contact: String, message: String): Result<String> {
+        return try {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("smsto:${Uri.encode(contact)}")
+                putExtra("sms_body", message)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Opened messages for $contact")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun navigateTo(destination: String): Result<String> {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${Uri.encode(destination)}")).apply {
+                setPackage("com.google.android.apps.maps")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Starting navigation to $destination")
+        } catch (e: Exception) {
+            // Fallback to web maps
+            try {
+                val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=${Uri.encode(destination)}")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallback)
+                Result.success("Opened maps for $destination")
+            } catch (ex: Exception) {
+                Result.failure(ex)
+            }
+        }
+    }
+
+    override fun createEvent(title: String, location: String): Result<String> {
+        return try {
+            val intent = Intent(Intent.ACTION_INSERT).apply {
+                data = android.provider.CalendarContract.Events.CONTENT_URI
+                putExtra(android.provider.CalendarContract.Events.TITLE, title)
+                if (location.isNotBlank()) {
+                    putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, location)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Opened calendar to create event")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun playMusic(songOrArtist: String): Result<String> {
+        return try {
+            val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, android.provider.MediaStore.Audio.Artists.ENTRY_CONTENT_TYPE)
+                putExtra(android.app.SearchManager.QUERY, songOrArtist)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Searching for $songOrArtist in music player")
+        } catch (e: Exception) {
+            // Fallback to youtube search
+            try {
+                val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(songOrArtist)}")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(fallback)
+                Result.success("Searching YouTube for $songOrArtist")
+            } catch (ex: Exception) {
+                Result.failure(ex)
+            }
+        }
     }
 }

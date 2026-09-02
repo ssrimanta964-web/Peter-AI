@@ -252,19 +252,27 @@ class OfflineCommandProvider(
             
             val queryText = searchQuery.ifEmpty { prompt }
             val directLocal = LocalKnowledgeEngine.answerQuery(queryText, detectedLang)
+            
+            var aiQueryResult = directLocal
+            if (aiQueryResult == null) {
+                val liveAnswer = BackgroundSearchFetcher.search(queryText)
+                if (liveAnswer != null) {
+                    aiQueryResult = liveAnswer
+                }
+            }
 
-            val bgSearchResponse = directLocal ?: when (detectedLang) {
+            val bgSearchResponse = aiQueryResult ?: when (detectedLang) {
                 SupportedLanguage.BENGALI ->
-                    "আমি '$queryText' সম্পর্কে তথ্য অনুসন্ধান করেছি। এই বিষয়ে আপনার নির্দিষ্ট কোনো প্রশ্ন বা তথ্য জানার থাকলে সরাসরি বলুন!"
+                    "আমি এই মুহূর্তে অফলাইনে আছি বন্ধু, তাই বিস্তারিত তথ্যের জন্য গুগল খুলে দিচ্ছি!"
                 SupportedLanguage.HINDI ->
-                    "मैंने '$queryText' के बारे में जानकारी सर्च कर ली है। अगर आप इसके बारे में कुछ और पूछना चाहते हैं, तो सीधे पूछ सकते हैं!"
+                    "मैं अभी ऑफलाइन हूँ दोस्त, इसलिए आपको जानकारी देने के लिए गूगल खोल रहा हूँ!"
                 SupportedLanguage.ENGLISH ->
-                    "I looked into '$queryText' for you, mate! Let me know if you'd like more specific details or have any questions about it."
+                    "I don't have those details offline, mate! Opening Google Search so you can see all the details!"
             }
 
             return AIResponse(
                 intent = PeterIntent(
-                    type = if (directLocal != null) IntentType.AI_QUERY else IntentType.WEB_SEARCH,
+                    type = if (aiQueryResult != null) IntentType.AI_QUERY else IntentType.SHOW_PROOF,
                     rawText = prompt,
                     query = queryText,
                     confidence = 0.96f
@@ -495,6 +503,28 @@ class OfflineCommandProvider(
             )
         }
 
+        // SIRI-LIKE FEATURES: Call, Text, Navigate, Music, Calendar
+        if (clean.startsWith("call ") || clean.startsWith("phone ") || clean.startsWith("dial ")) {
+            val target = clean.removePrefix("call ").removePrefix("phone ").removePrefix("dial ").trim()
+            return AIResponse(intent = PeterIntent(type = IntentType.CALL_CONTACT, rawText = prompt, query = target), directAnswer = null)
+        }
+        if (clean.startsWith("text ") || clean.startsWith("message ") || clean.startsWith("sms ")) {
+            val target = clean.removePrefix("text ").removePrefix("message ").removePrefix("sms ").trim()
+            return AIResponse(intent = PeterIntent(type = IntentType.SEND_SMS, rawText = prompt, query = target), directAnswer = null)
+        }
+        if (clean.startsWith("navigate to ") || clean.startsWith("directions to ") || clean.startsWith("take me to ")) {
+            val target = clean.removePrefix("navigate to ").removePrefix("directions to ").removePrefix("take me to ").trim()
+            return AIResponse(intent = PeterIntent(type = IntentType.NAVIGATE_TO, rawText = prompt, query = target), directAnswer = null)
+        }
+        if (clean.startsWith("play ") || clean.startsWith("play music ") || clean.startsWith("play song ")) {
+            val target = clean.removePrefix("play ").removePrefix("play music ").removePrefix("play song ").trim()
+            return AIResponse(intent = PeterIntent(type = IntentType.PLAY_MUSIC, rawText = prompt, query = target), directAnswer = null)
+        }
+        if (clean.startsWith("create event ") || clean.startsWith("schedule ") || clean.startsWith("remind me to ")) {
+            val target = clean.removePrefix("create event ").removePrefix("schedule ").removePrefix("remind me to ").trim()
+            return AIResponse(intent = PeterIntent(type = IntentType.CREATE_EVENT, rawText = prompt, query = target), directAnswer = null)
+        }
+
         // 12. Local Knowledge & Q&A Engine (Science, Math, Capitals, MCU, Tech, General facts)
         val knowledgeAnswer = LocalKnowledgeEngine.answerQuery(prompt, detectedLang)
         if (knowledgeAnswer != null) {
@@ -510,7 +540,9 @@ class OfflineCommandProvider(
             .removePrefix("peter")
             .trim()
 
-        val answerText = when (detectedLang) {
+        val liveAnswer = BackgroundSearchFetcher.search(queryKeywords)
+        
+        val answerText = liveAnswer ?: when (detectedLang) {
             SupportedLanguage.BENGALI ->
                 "বন্ধু, '$queryKeywords' সম্পর্কে লাইভ তথ্য দেখতে চাইলে বলুন 'গুগলে সার্চ করো' অথবা 'প্রমাণ দেখাও'!"
             SupportedLanguage.HINDI ->

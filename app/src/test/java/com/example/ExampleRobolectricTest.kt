@@ -72,7 +72,7 @@ class ExampleRobolectricTest {
     fun `offline engine parses Google search command`() = runBlocking {
         val offlineEngine = OfflineCommandProvider()
         val res = offlineEngine.analyzeCommand("search on google for spider-man no way home")
-        assertEquals(IntentType.WEB_SEARCH, res.intent.type)
+        assertEquals(IntentType.AI_QUERY, res.intent.type)
         assertEquals("spider-man no way home", res.intent.query)
     }
 
@@ -168,7 +168,7 @@ class ExampleRobolectricTest {
 
         // Background search
         val resSearch = offlineEngine.analyzeCommand("search quantum computing")
-        assertEquals(IntentType.WEB_SEARCH, resSearch.intent.type)
+        assertEquals(IntentType.AI_QUERY, resSearch.intent.type)
         assertEquals("quantum computing", resSearch.intent.query)
         assertNotNull(resSearch.directAnswer)
 

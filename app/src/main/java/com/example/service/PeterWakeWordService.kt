@@ -42,9 +42,38 @@ class PeterWakeWordService : Service() {
     private var partialWakeLock: PowerManager.WakeLock? = null
     private var overlayManager: LockdownOverlayManager? = null
 
+    private val receiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "com.example.ACTION_PAUSE_WAKE_WORD" -> {
+                    android.util.Log.d("PeterWakeWordService", "Received pause intent. Stopping wake word listening.")
+                    wakeWordDetector?.stop()
+                }
+                "com.example.ACTION_RESTART_WAKE_WORD" -> {
+                    android.util.Log.d("PeterWakeWordService", "Received restart intent. Resuming wake word listening.")
+                    wakeWordDetector?.startContinuousWakeWordListening()
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         
+        try {
+            val filter = android.content.IntentFilter().apply {
+                addAction("com.example.ACTION_PAUSE_WAKE_WORD")
+                addAction("com.example.ACTION_RESTART_WAKE_WORD")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(receiver, filter)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PeterWakeWordService", "Failed to register receiver", e)
+        }
+
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
             partialWakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Peter:PersistentWakeLock")
@@ -145,15 +174,30 @@ class PeterWakeWordService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        try {
+            val notification = createNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: SecurityException) {
+            android.util.Log.e("PeterWakeWordService", "Foreground service microphone permission denied.", e)
+            stopSelf()
+            return START_NOT_STICKY
+        } catch (e: Exception) {
+            android.util.Log.e("PeterWakeWordService", "Failed to start foreground", e)
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         wakeWordDetector?.startContinuousWakeWordListening()
@@ -162,6 +206,10 @@ class PeterWakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(receiver)
+        } catch (e: Exception) {}
+
         try {
             partialWakeLock?.let { if (it.isHeld) it.release() }
         } catch (e: Exception) {}
@@ -222,11 +270,22 @@ class PeterWakeWordService : Service() {
         const val NOTIFICATION_ID = 1001
 
         fun startService(context: Context) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return
+            }
             val intent = Intent(context, PeterWakeWordService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
+                try {
+                    context.startForegroundService(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("PeterWakeWordService", "Failed to start service", e)
+                }
             } else {
-                context.startService(intent)
+                try {
+                    context.startService(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("PeterWakeWordService", "Failed to start service", e)
+                }
             }
         }
 

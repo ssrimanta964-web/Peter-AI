@@ -30,6 +30,7 @@ class CommandRouter(
                 SupportedLanguage.HINDI -> "कोई आवाज़ नहीं सुनाई दी दोस्त। कृपया फिर से बोलें।"
                 SupportedLanguage.ENGLISH -> "I did not detect any command, mate. Please speak again."
             }
+
             return CommandResult(
                 success = false,
                 intentType = IntentType.UNKNOWN,
@@ -90,6 +91,11 @@ class CommandRouter(
             IntentType.SHOW_PROOF -> executeShowProof(intent, lang)
             IntentType.SCREEN_SEARCH -> executeScreenSearch(intent, lang)
             IntentType.EMERGENCY_LOCKDOWN -> executeEmergencyLockdown(intent, lang)
+            IntentType.CALL_CONTACT -> executeCallContact(intent, lang)
+            IntentType.SEND_SMS -> executeSendSms(intent, lang)
+            IntentType.NAVIGATE_TO -> executeNavigateTo(intent, lang)
+            IntentType.CREATE_EVENT -> executeCreateEvent(intent, lang)
+            IntentType.PLAY_MUSIC -> executePlayMusic(intent, lang)
             IntentType.AI_QUERY -> {
                 val raw = intent.query.ifEmpty { intent.rawText }
                 lastSearchQuery = raw
@@ -433,21 +439,34 @@ class CommandRouter(
         )
     }
 
-    private fun executeWebSearch(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+    private suspend fun executeWebSearch(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
         val query = intent.query.ifEmpty { intent.rawText }
         lastSearchQuery = query
+        
+        val liveAnswer = com.example.domain.ai.BackgroundSearchFetcher.search(query)
+        if (liveAnswer != null) {
+            return CommandResult(
+                success = true,
+                intentType = IntentType.AI_QUERY,
+                spokenResponse = liveAnswer,
+                displayDetails = "Background Search Complete",
+                searchQuery = query
+            )
+        }
+
+        deviceController.searchWeb(query)
 
         val spoken = when (lang) {
-            SupportedLanguage.HINDI -> "मैंने '$query' के बारे में जानकारी सर्च कर ली है।"
-            SupportedLanguage.BENGALI -> "আমি '$query' সম্পর্কে তথ্য খুঁজে নিয়েছি।"
-            SupportedLanguage.ENGLISH -> "I searched for '$query' for you, mate!"
+            SupportedLanguage.HINDI -> "मैंने '$query' के बारे में जानकारी सर्च कर ली है। आपके लिए गूगल खोल रहा हूँ!"
+            SupportedLanguage.BENGALI -> "আমি '$query' সম্পর্কে তথ্য খুঁজে নিয়েছি। বিস্তারিত দেখার জন্য গুগল খুলছি!"
+            SupportedLanguage.ENGLISH -> "I searched for '$query' for you, mate! Opening Google so you can see the details."
         }
 
         return CommandResult(
             success = true,
             intentType = IntentType.WEB_SEARCH,
             spokenResponse = spoken,
-            displayDetails = "Search Query: '$query'",
+            displayDetails = "Google Search Opened: '$query'",
             searchQuery = query
         )
     }
@@ -514,6 +533,60 @@ class CommandRouter(
             spokenResponse = spoken,
             displayDetails = "SECURITY PROTOCOL CODE RED • EMERGENCY LOCKDOWN ACTIVATED"
         )
+    
+    }
+    private fun executeCallContact(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+        val target = intent.query.ifEmpty { intent.rawText.replace("call ", "", ignoreCase = true) }
+        deviceController.callContact(target)
+        val spoken = when (lang) {
+            SupportedLanguage.HINDI -> "कॉल लगा रहा हूँ, दोस्त!"
+            SupportedLanguage.BENGALI -> "আমি কল করছি বন্ধু!"
+            SupportedLanguage.ENGLISH -> "Pulling up the dialer for you, mate!"
+        }
+        return CommandResult(success = true, intentType = IntentType.CALL_CONTACT, spokenResponse = spoken, displayDetails = "Calling: $target")
+    }
+
+    private fun executeSendSms(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+        val target = intent.query.ifEmpty { intent.rawText.replace("text ", "", ignoreCase = true) }
+        deviceController.sendSms(target, intent.action)
+        val spoken = when (lang) {
+            SupportedLanguage.HINDI -> "मैसेज ऐप खोल रहा हूँ!"
+            SupportedLanguage.BENGALI -> "মেসেজ অ্যাপ খুলছি!"
+            SupportedLanguage.ENGLISH -> "Opening your messages, mate!"
+        }
+        return CommandResult(success = true, intentType = IntentType.SEND_SMS, spokenResponse = spoken, displayDetails = "Texting: $target")
+    }
+
+    private fun executeNavigateTo(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+        val target = intent.query.ifEmpty { intent.rawText.replace("navigate to ", "", ignoreCase = true) }
+        deviceController.navigateTo(target)
+        val spoken = when (lang) {
+            SupportedLanguage.HINDI -> "नेविगेशन शुरू कर रहा हूँ!"
+            SupportedLanguage.BENGALI -> "নেভিগেশন শুরু করছি!"
+            SupportedLanguage.ENGLISH -> "Setting your destination, mate! Let's go!"
+        }
+        return CommandResult(success = true, intentType = IntentType.NAVIGATE_TO, spokenResponse = spoken, displayDetails = "Navigating to: $target")
+    }
+
+    private fun executeCreateEvent(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+        val target = intent.query.ifEmpty { "New Event" }
+        deviceController.createEvent(target, intent.action)
+        val spoken = when (lang) {
+            SupportedLanguage.HINDI -> "कैलेंडर खोल रहा हूँ!"
+            SupportedLanguage.BENGALI -> "ক্যালেন্ডার খুলছি!"
+            SupportedLanguage.ENGLISH -> "Pulling up your calendar, mate!"
+        }
+        return CommandResult(success = true, intentType = IntentType.CREATE_EVENT, spokenResponse = spoken, displayDetails = "Creating event: $target")
+    }
+
+    private fun executePlayMusic(intent: PeterIntent, lang: SupportedLanguage): CommandResult {
+        val target = intent.query.ifEmpty { intent.rawText.replace("play ", "", ignoreCase = true) }
+        deviceController.playMusic(target)
+        val spoken = when (lang) {
+            SupportedLanguage.HINDI -> "म्यूजिक प्ले कर रहा हूँ!"
+            SupportedLanguage.BENGALI -> "মিউজিক চালাচ্ছি!"
+            SupportedLanguage.ENGLISH -> "Setting up the tunes, mate! Enjoy!"
+        }
+        return CommandResult(success = true, intentType = IntentType.PLAY_MUSIC, spokenResponse = spoken, displayDetails = "Playing: $target")
     }
 }
-

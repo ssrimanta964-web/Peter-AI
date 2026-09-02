@@ -31,6 +31,11 @@ enum class IntentType {
     SHOW_PROOF,
     SCREEN_SEARCH,
     EMERGENCY_LOCKDOWN,
+    CALL_CONTACT,
+    SEND_SMS,
+    NAVIGATE_TO,
+    CREATE_EVENT,
+    PLAY_MUSIC,
     AI_QUERY,
     UNKNOWN
 }

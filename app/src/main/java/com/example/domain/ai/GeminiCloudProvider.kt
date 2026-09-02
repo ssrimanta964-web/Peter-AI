@@ -20,11 +20,11 @@ class GeminiCloudProvider(
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val supportedModels = listOf("gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview")
+    private val supportedModels = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest", "gemini-3.5-flash")
 
     override suspend fun analyzeCommand(
         prompt: String,
@@ -84,7 +84,14 @@ class GeminiCloudProvider(
             
             4. DEVICE ACTION COMMANDS (Only when user explicitly asks to control phone features):
                - If the user asks to toggle flashlight, change volume, open an app, check battery/phone status, set alarm/timer, or activate emergency lockdown, set the corresponding intent.
+               - IMPORTANT NEW FEATURES:
+                 - To call someone, use "intent": "CALL_CONTACT" and put the name in "query".
+                 - To send a text/SMS, use "intent": "SEND_SMS" and put the name in "query".
+                 - To navigate/get directions, use "intent": "NAVIGATE_TO" and put the destination in "query".
+                 - To create a calendar event, use "intent": "CREATE_EVENT" and put the title in "query".
+                 - To play music/songs, use "intent": "PLAY_MUSIC" and put the song/artist in "query".
                - For general knowledge, Q&A, math, explanations, search queries, or conversation, set "intent": "AI_QUERY".
+               - CRITICAL: Even if the user asks you to "search the web" for something, YOU MUST still answer their query fully and comprehensively in the `answer` field! Do not just say you are searching.
             
             EMERGENCY PROTOCOL (CODE RED):
             If the user says "code red", "hey peter code red", "activate code red", or emergency lockdown:
@@ -92,7 +99,7 @@ class GeminiCloudProvider(
             
             Respond ONLY with a JSON object in this format:
             {
-              "intent": "AI_QUERY" | "WEB_SEARCH" | "SHOW_PROOF" | "OPEN_APP" | "FLASHLIGHT" | "BATTERY_STATUS" | "VOLUME_CONTROL" | "OPEN_SETTINGS" | "TIME_AND_DATE" | "ALARM" | "TIMER" | "PHONE_STATUS" | "NETWORK_STATUS" | "EMERGENCY_LOCKDOWN",
+              "intent": "AI_QUERY" | "WEB_SEARCH" | "SHOW_PROOF" | "OPEN_APP" | "FLASHLIGHT" | "BATTERY_STATUS" | "VOLUME_CONTROL" | "OPEN_SETTINGS" | "TIME_AND_DATE" | "ALARM" | "TIMER" | "PHONE_STATUS" | "NETWORK_STATUS" | "EMERGENCY_LOCKDOWN" | "CALL_CONTACT" | "SEND_SMS" | "NAVIGATE_TO" | "CREATE_EVENT" | "PLAY_MUSIC",
               "action": "ON" | "OFF" | "UP" | "DOWN" | "MAX" | "MUTE" | "SET" | "ACTIVATE" | "",
               "target_app": "youtube" | "chrome" | "camera" | "calculator" | "maps" | "clock" | "settings" | "spotify" | "whatsapp" | "",
               "target_setting": "wifi" | "bluetooth" | "display" | "sound" | "battery" | "date" | "location" | "",
@@ -157,6 +164,9 @@ class GeminiCloudProvider(
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
 
+                if (!response.isSuccessful) {
+                    android.util.Log.e("GeminiAPI", "Failed request to $modelName: ${response.code} ${response.message} - Body: $responseBody")
+                }
                 if (response.isSuccessful && responseBody.isNotBlank()) {
                     val rootJson = JSONObject(responseBody)
                     val candidates = rootJson.optJSONArray("candidates")
@@ -320,6 +330,9 @@ class GeminiCloudProvider(
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
 
+                if (!response.isSuccessful) {
+                    android.util.Log.e("GeminiAPI", "Failed request to $modelName: ${response.code} ${response.message} - Body: $responseBody")
+                }
                 if (response.isSuccessful && responseBody.isNotBlank()) {
                     val rootJson = JSONObject(responseBody)
                     val candidates = rootJson.optJSONArray("candidates")

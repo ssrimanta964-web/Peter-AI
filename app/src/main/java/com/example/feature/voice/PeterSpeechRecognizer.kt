@@ -15,6 +15,11 @@ import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 class PeterSpeechRecognizer(
@@ -29,10 +34,12 @@ class PeterSpeechRecognizer(
 
     private var speechRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     private val _rmsLevel = MutableStateFlow(0f)
     val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
 
+    private var retryCount = 0
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
@@ -47,23 +54,33 @@ class PeterSpeechRecognizer(
         }
     }
 
-    fun startListening(preferredLanguage: String = "Auto Detect (English, Hindi, Bengali)") {
+    fun startListening(preferredLanguage: String = "Auto Detect (English, Hindi, Bengali)", isRetry: Boolean = false) {
         mainHandler.post {
             try {
                 stopListeningInternal()
+                if (!isRetry) retryCount = 0
 
                 val isOnline = isNetworkAvailable()
 
                 // Create recognizer on Main thread
+                val googleComponent = android.content.ComponentName(
+                    "com.google.android.googlequicksearchbox",
+                    "com.google.android.voicesearch.serviceapi.GoogleRecognitionService"
+                )
+                
                 speechRecognizer = try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isOnline && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
                         SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
                     } else {
-                        SpeechRecognizer.createSpeechRecognizer(context)
+                        SpeechRecognizer.createSpeechRecognizer(context, googleComponent)
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed creating preferred recognizer, fallback to default", e)
-                    SpeechRecognizer.createSpeechRecognizer(context)
+                    Log.w(TAG, "Failed creating Google recognizer, fallback to default", e)
+                    try {
+                        SpeechRecognizer.createSpeechRecognizer(context)
+                    } catch (e2: Exception) {
+                        null
+                    }
                 }
 
                 if (speechRecognizer == null) {
@@ -107,6 +124,20 @@ class PeterSpeechRecognizer(
                         _rmsLevel.value = 0f
                         onStateChange(false)
 
+                        if ((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == 11) && retryCount < 2) {
+                            retryCount++
+                            Log.w(TAG, "Recognizer busy. Scheduling retry $retryCount...")
+                            _isListening.value = false
+                            onStateChange(false)
+                            
+                            // Try again after 600ms
+                            scope.launch {
+                                kotlinx.coroutines.delay(600)
+                                startListening(preferredLanguage, isRetry = true)
+                            }
+                            return
+                        }
+
                         val errorMsg = when (error) {
                             SpeechRecognizer.ERROR_AUDIO -> "Audio recording error. Please check microphone."
                             SpeechRecognizer.ERROR_CLIENT -> "Voice input cancelled or client error."
@@ -117,6 +148,8 @@ class PeterSpeechRecognizer(
                             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service was busy. Please try again."
                             SpeechRecognizer.ERROR_SERVER -> "Voice recognition server error."
                             SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap microphone to speak."
+                            11 -> "Speech server disconnected. Please try again."
+                            12 -> "Language not supported by voice recognizer."
                             else -> "Speech error (Code $error)"
                         }
 
@@ -197,6 +230,21 @@ class PeterSpeechRecognizer(
             _rmsLevel.value = 0f
             onStateChange(false)
             stopListeningInternal()
+        }
+    }
+
+    fun cancel() {
+        mainHandler.post {
+            _isListening.value = false
+            _rmsLevel.value = 0f
+            onStateChange(false)
+            try {
+                speechRecognizer?.cancel()
+                speechRecognizer?.destroy()
+                speechRecognizer = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cancelling speech recognizer", e)
+            }
         }
     }
 }
