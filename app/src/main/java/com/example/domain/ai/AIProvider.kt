@@ -12,5 +12,8 @@ data class AIResponse(
 
 interface AIProvider {
     val name: String
-    suspend fun analyzeCommand(prompt: String): AIResponse
+    suspend fun analyzeCommand(
+        prompt: String,
+        conversationHistory: List<com.example.core.model.ChatMessage> = emptyList()
+    ): AIResponse
 }

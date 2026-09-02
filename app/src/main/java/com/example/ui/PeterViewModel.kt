@@ -70,9 +70,10 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     private var speechRecognizer: PeterSpeechRecognizer? = null
     private var tts: PeterTextToSpeech? = null
     private var inAppWakeWordDetector: PeterWakeWordDetector? = null
+    private var geminiLiveClient: com.example.domain.ai.GeminiLiveClient? = null
 
     val rmsLevel: StateFlow<Float> get() = speechRecognizer?.rmsLevel ?: MutableStateFlow(0f)
-    val isListening: StateFlow<Boolean> get() = speechRecognizer?.isListening ?: MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> get() = geminiLiveClient?.isActive ?: MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> get() = tts?.isSpeaking ?: MutableStateFlow(false)
     val availableVoices: StateFlow<List<String>> get() = tts?.availableVoices ?: MutableStateFlow(listOf("Default"))
 
@@ -80,6 +81,7 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         initTts(application)
         initSpeechRecognizer(application)
         initWakeWordDetector(application)
+        initLiveClient()
         refreshTelemetry()
 
         // Auto-start background wake word service if enabled
@@ -93,7 +95,7 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun initTts(context: Context) {
-        tts = PeterTextToSpeech(context) { isSpeaking ->
+        tts = PeterTextToSpeech(context, preferences) { isSpeaking ->
             if (isSpeaking) {
                 _peterState.value = PeterState.SPEAKING
             } else if (_peterState.value == PeterState.SPEAKING) {
@@ -154,9 +156,7 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun resumeInAppWakeWord() {
-        if (preferences.settings.value.wakeWordEnabled && !(_peterState.value == PeterState.LISTENING || _peterState.value == PeterState.SPEAKING)) {
-            inAppWakeWordDetector?.startContinuousWakeWordListening()
-        }
+        // Handled by PeterWakeWordService to prevent microphone conflict
     }
 
     private fun initSpeechRecognizer(context: Context) {
@@ -191,18 +191,57 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun initLiveClient() {
+        geminiLiveClient = com.example.domain.ai.GeminiLiveClient(
+            onMessage = { spokenText ->
+                viewModelScope.launch {
+                    _statusText.value = "Gemini: $spokenText"
+                    repository.saveMessage(
+                        ChatMessage(
+                            text = spokenText,
+                            isUser = false,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                }
+            },
+            onError = { errorMsg ->
+                _statusText.value = errorMsg
+                _peterState.value = PeterState.IDLE
+            },
+            onStateChange = { isActive ->
+                if (isActive) {
+                    _peterState.value = PeterState.LISTENING
+                    _statusText.value = "Live API connected. Listening..."
+                } else if (_peterState.value == PeterState.LISTENING) {
+                    _peterState.value = PeterState.IDLE
+                    _statusText.value = "Live session ended."
+                }
+            }
+        )
+    }
+
     fun startListening() {
         tts?.stop()
         inAppWakeWordDetector?.stop()
-        speechRecognizer?.startListening(settings.value.preferredLanguage)
+        
+        // Start Live Session instead of standard recognizer
+        geminiLiveClient?.startLiveSession()
+        
+        // speechRecognizer?.startListening(settings.value.preferredLanguage)
     }
 
     fun updatePreferredLanguage(language: String) {
         preferences.updatePreferredLanguage(language)
     }
 
+    fun updateCustomApiKey(apiKey: String) {
+        preferences.updateCustomApiKey(apiKey)
+    }
+
     fun stopListening() {
-        speechRecognizer?.stopListening()
+        // speechRecognizer?.stopListening()
+        geminiLiveClient?.stopLiveSession()
         if (_peterState.value == PeterState.LISTENING) {
             _peterState.value = PeterState.IDLE
             _statusText.value = "Listening cancelled."
@@ -219,6 +258,21 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     fun executeUserPrompt(rawPrompt: String) {
         if (rawPrompt.isBlank()) return
 
+        // If Live API session is active, route text there instead of standard prompt
+        if (geminiLiveClient?.isActive?.value == true) {
+            viewModelScope.launch {
+                repository.saveMessage(
+                    ChatMessage(
+                        text = rawPrompt,
+                        isUser = true,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            }
+            geminiLiveClient?.sendTextMessage(rawPrompt)
+            return
+        }
+
         viewModelScope.launch(Dispatchers.Main) {
             _peterState.value = PeterState.THINKING
             _statusText.value = "Analyzing command: \"$rawPrompt\""
@@ -232,8 +286,15 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
 
+            // Fetch recent conversation history for multi-turn contextual memory (like ChatGPT/Gemini)
+            val recentHistory = try {
+                repository.getRecentMessages(8)
+            } catch (e: Exception) {
+                emptyList()
+            }
+
             // Route command
-            val commandResult = commandRouter.routeAndExecute(rawPrompt)
+            val commandResult = commandRouter.routeAndExecute(rawPrompt, recentHistory)
             refreshTelemetry()
 
             // Save assistant reply
@@ -449,6 +510,14 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
         activateLockdown()
     }
 
+    fun isDeviceAdminActive(): Boolean {
+        return deviceController.isDeviceAdminActive()
+    }
+
+    fun executeHardwareLock(): Boolean {
+        return deviceController.executeHardwareLock()
+    }
+
     fun unlockFromLockdown(password: String): Boolean {
         return deactivateLockdown(password)
     }
@@ -456,16 +525,24 @@ class PeterViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSpeechRate(rate: Float) = preferences.updateSpeechRate(rate)
     fun updateSpeechPitch(pitch: Float) = preferences.updateSpeechPitch(pitch)
     fun updateVoiceName(voiceName: String) = preferences.updateVoiceName(voiceName)
+    fun updateUseNeuralStudioVoice(enabled: Boolean) = preferences.updateUseNeuralStudioVoice(enabled)
     fun updateAiProvider(provider: String) = preferences.updateAiProvider(provider)
     fun updateLowPowerMode(lowPower: Boolean) = preferences.updateLowPowerMode(lowPower)
     fun updateAutoSpeak(autoSpeak: Boolean) = preferences.updateAutoSpeak(autoSpeak)
     fun updateBossProfile(name: String, title: String, details: String, nickname: String) =
         preferences.updateBossProfile(name, title, details, nickname)
 
+    fun previewVoice(sampleText: String? = null) {
+        val s = preferences.settings.value
+        val text = sampleText ?: "Hey mate! Peter Parker here! All systems are online and ready to swing into action!"
+        tts?.speak(text, s.speechRate, s.speechPitch, s.voiceName)
+    }
+
     override fun onCleared() {
         speechRecognizer?.stopListening()
         tts?.shutdown()
         inAppWakeWordDetector?.stop()
+        geminiLiveClient?.destroy()
         super.onCleared()
     }
 }

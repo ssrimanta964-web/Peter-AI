@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,11 +23,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,19 +79,26 @@ fun SettingsDialog(
     onSpeechRateChange: (Float) -> Unit,
     onSpeechPitchChange: (Float) -> Unit,
     onVoiceChange: (String) -> Unit,
+    onUseNeuralVoiceChange: (Boolean) -> Unit = {},
+    onPreviewVoice: () -> Unit = {},
     onPreferredLanguageChange: (String) -> Unit,
     onAiProviderChange: (String) -> Unit,
     onWakeWordChange: (Boolean) -> Unit,
     onLowPowerChange: (Boolean) -> Unit,
     onAutoSpeakChange: (Boolean) -> Unit,
     onUpdateBossProfile: (name: String, title: String, details: String, nickname: String) -> Unit,
+    onCustomApiKeyChange: (String) -> Unit = {},
+    onTriggerLockdown: () -> Unit = {},
     onClearHistory: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var bossNameInput by remember(settings.bossName) { mutableStateOf(settings.bossName) }
     var bossTitleInput by remember(settings.bossTitle) { mutableStateOf(settings.bossTitle) }
     var bossDetailsInput by remember(settings.bossDetails) { mutableStateOf(settings.bossDetails) }
+    var apiKeyInput by remember(settings.customApiKey) { mutableStateOf(settings.customApiKey) }
     var profileSaved by remember { mutableStateOf(false) }
+    var apiKeySaved by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -338,7 +350,7 @@ fun SettingsDialog(
                 }
 
                 // 2. VOICE SYNTHESIS SETTINGS
-                SettingsSectionHeader(icon = Icons.Default.RecordVoiceOver, title = "VOICE ENGINE")
+                SettingsSectionHeader(icon = Icons.Default.RecordVoiceOver, title = "VOICE ENGINE (TOM HOLLAND)")
 
                 // Voice Persona Badge
                 Box(
@@ -349,30 +361,81 @@ fun SettingsDialog(
                         .border(1.dp, SophisticatedCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
                         .padding(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.RecordVoiceOver,
-                            contentDescription = null,
-                            tint = SophisticatedCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Tom Holland Voice Persona",
-                                color = TextWhite,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = SophisticatedCyan,
+                                modifier = Modifier.size(20.dp)
                             )
+                            Column {
+                                Text(
+                                    text = "Tom Holland Voice Persona",
+                                    color = TextWhite,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Youthful London British accent, high-energy, witty & charismatic",
+                                    color = SophisticatedCyan,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+
+                        // Test Voice Button
+                        Button(
+                            onClick = onPreviewVoice,
+                            modifier = Modifier
+                                .testTag("button_test_tom_holland_voice")
+                                .fillMaxWidth()
+                                .height(38.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SophisticatedCyan,
+                                contentColor = SophisticatedBlack
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Hearing,
+                                contentDescription = null,
+                                tint = SophisticatedBlack,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.size(6.dp))
                             Text(
-                                text = "Energetic, witty & funny young British male hero",
-                                color = SophisticatedCyan,
-                                style = MaterialTheme.typography.labelSmall
+                                text = "TEST TOM HOLLAND VOICE",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
+                }
+
+                // Neural Studio Voice Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Lifelike Neural Studio Voice", color = TextWhite, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Gemini Puck Neural Audio (Authentic Tom Holland Tone)", color = SophisticatedCyan, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Switch(
+                        checked = settings.useNeuralStudioVoice,
+                        onCheckedChange = onUseNeuralVoiceChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = SophisticatedBlack,
+                            checkedTrackColor = SophisticatedCyan,
+                            uncheckedTrackColor = SophisticatedSurface
+                        ),
+                        modifier = Modifier.testTag("switch_neural_voice")
+                    )
                 }
 
                 // Auto Speak Toggle
@@ -400,8 +463,8 @@ fun SettingsDialog(
                 // Speech Speed Slider
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Speech Speed", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Text(String.format("%.2fx", settings.speechRate), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
+                        Text("Speech Speed (Tempo)", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        Text("${String.format("%.2fx", settings.speechRate)} (1.10x optimal)", color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
                     }
                     Slider(
                         value = settings.speechRate,
@@ -416,8 +479,8 @@ fun SettingsDialog(
                 // Speech Pitch Slider
                 Column {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Voice Pitch", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        Text(String.format("%.2fx", settings.speechPitch), color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
+                        Text("Voice Pitch (Inflection)", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        Text("${String.format("%.2fx", settings.speechPitch)} (1.12x optimal)", color = SophisticatedCyan, style = MaterialTheme.typography.bodySmall)
                     }
                     Slider(
                         value = settings.speechPitch,
@@ -508,6 +571,49 @@ fun SettingsDialog(
                     }
                 }
 
+                // Optional Custom Gemini API Key Field
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Custom Gemini API Key (Optional)",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = {
+                            apiKeyInput = it
+                            apiKeySaved = false
+                        },
+                        placeholder = {
+                            Text("AIzaSy... (Leave empty for default app key)", color = TextMuted, fontSize = 12.sp)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("custom_api_key_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SophisticatedCyan,
+                            unfocusedBorderColor = SophisticatedBorder,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        )
+                    )
+                    if (apiKeyInput != settings.customApiKey) {
+                        Button(
+                            onClick = {
+                                onCustomApiKeyChange(apiKeyInput)
+                                apiKeySaved = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SophisticatedCyan),
+                            modifier = Modifier.fillMaxWidth().testTag("save_api_key_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = SophisticatedBlack, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(if (apiKeySaved) "API Key Saved ✓" else "Save API Key", color = SophisticatedBlack, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 // 3. WAKE WORD SETTINGS
                 SettingsSectionHeader(icon = Icons.Default.Hearing, title = "WAKE WORD (HEY PETER)")
                 Row(
@@ -537,7 +643,72 @@ fun SettingsDialog(
                     fontSize = 10.sp
                 )
 
-                // 4. PERFORMANCE & PRIVACY
+                // 4. EMERGENCY PROTOCOL (LOCKDOWN)
+                SettingsSectionHeader(icon = Icons.Default.Warning, title = "EMERGENCY PROTOCOL (CODE RED)")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(StatusRed.copy(alpha = 0.10f))
+                        .border(1.dp, StatusRed.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = StatusRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "System Lockdown Security",
+                                    color = TextWhite,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Locks HUD with full biometric shield. Master passcode: \"Daddy is home\"",
+                                    color = StatusRed.copy(alpha = 0.9f),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                onTriggerLockdown()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .testTag("btn_trigger_emergency_lockdown")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = TextWhite,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(
+                                text = "🚨 ENGAGE EMERGENCY LOCKDOWN",
+                                color = TextWhite,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+
+                // 5. PERFORMANCE & PRIVACY
                 SettingsSectionHeader(icon = Icons.Default.Security, title = "PERFORMANCE & PRIVACY")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -560,22 +731,56 @@ fun SettingsDialog(
                     )
                 }
 
-                // Clear History Button
-                Button(
-                    onClick = {
-                        onClearHistory()
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusRed.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(10.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusRed.copy(alpha = 0.4f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("btn_clear_history")
+                // 6. APPLICATION MANAGEMENT
+                SettingsSectionHeader(icon = Icons.Default.Delete, title = "APPLICATION MANAGEMENT")
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = StatusRed, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Clear Conversation History", color = StatusRed, style = MaterialTheme.typography.labelLarge)
+                    // Clear History Button
+                    Button(
+                        onClick = {
+                            onClearHistory()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = StatusRed.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, StatusRed.copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_clear_history")
+                    ) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = StatusRed, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text("Clear Logs", color = StatusRed, style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    // Uninstall App Button
+                    Button(
+                        onClick = {
+                            try {
+                                val uninstallIntent = Intent(Intent.ACTION_DELETE).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(uninstallIntent)
+                            } catch (e: Exception) {
+                                val detailsIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(detailsIntent)
+                            }
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SophisticatedSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SophisticatedBorder),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("btn_uninstall_app")
+                    ) {
+                        Text("Uninstall App", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }

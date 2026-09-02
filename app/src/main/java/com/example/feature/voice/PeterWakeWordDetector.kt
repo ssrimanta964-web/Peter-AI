@@ -124,15 +124,15 @@ class PeterWakeWordDetector(
 
         // 3. Create Speech Recognizer
         try {
-            speechRecognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-                try {
-                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-                } catch (e: Exception) {
-                    SpeechRecognizer.createSpeechRecognizer(context)
-                }
-            } else {
+            speechRecognizer = try {
                 SpeechRecognizer.createSpeechRecognizer(context)
-            }.apply {
+            } catch (e: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                } else null
+            }
+            
+            speechRecognizer?.apply {
                 setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
@@ -190,6 +190,7 @@ class PeterWakeWordDetector(
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                 putExtra("android.speech.extra.ADDITIONAL_LANGUAGES", arrayOf("en-US", "hi-IN", "bn-IN", "en-GB"))
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)

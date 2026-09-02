@@ -10,24 +10,27 @@ class AIBrain(
     private val cloudProvider: AIProvider = GeminiCloudProvider(preferences),
     private val offlineProvider: AIProvider = OfflineCommandProvider(preferences)
 ) {
-    suspend fun processUserPrompt(prompt: String): AIResponse {
+    suspend fun processUserPrompt(
+        prompt: String,
+        conversationHistory: List<com.example.core.model.ChatMessage> = emptyList()
+    ): AIResponse {
         val mode = preferences.settings.value.aiProvider
         val netInfo = deviceController.getNetworkInfo()
 
         // If user forced Local Only or no internet is available, use Offline Provider directly
         if (mode == "Local Only" || !netInfo.isConnected) {
-            return offlineProvider.analyzeCommand(prompt)
+            return offlineProvider.analyzeCommand(prompt, conversationHistory)
         }
 
         // Fast path: if the command is a direct, obvious local device command (e.g. flashlight, volume, battery, proof, emergency), offline can resolve instantly without network latency
-        val localAttempt = offlineProvider.analyzeCommand(prompt)
+        val localAttempt = offlineProvider.analyzeCommand(prompt, conversationHistory)
         if (localAttempt.intent.type != IntentType.AI_QUERY && localAttempt.intent.type != IntentType.WEB_SEARCH && localAttempt.intent.confidence >= 0.90f) {
             return localAttempt
         }
 
-        // Otherwise, send to Cloud Provider (Gemini)
-        val cloudResponse = cloudProvider.analyzeCommand(prompt)
-        if (cloudResponse.error == null) {
+        // Send knowledge, reasoning, conversational, and general questions to Cloud Provider (Gemini) with full conversation history
+        val cloudResponse = cloudProvider.analyzeCommand(prompt, conversationHistory)
+        if (cloudResponse.error == null && !cloudResponse.directAnswer.isNullOrBlank()) {
             return cloudResponse
         }
 

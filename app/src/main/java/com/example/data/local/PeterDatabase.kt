@@ -54,6 +54,9 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentMessages(limit: Int = 50): Flow<List<ChatMessageEntity>>
 
+    @Query("SELECT * FROM (SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
+    suspend fun getRecentMessagesList(limit: Int = 10): List<ChatMessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessageEntity): Long
 

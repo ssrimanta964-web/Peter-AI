@@ -90,6 +90,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun LockdownSecurityScreen(
     onUnlockAttempt: (String) -> Boolean,
+    isDeviceAdminActive: Boolean = false,
+    onEnableDeviceAdmin: () -> Unit = {},
+    onHardwareLock: () -> Boolean = { false },
+    showDeviceAdminControls: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // Prevent back navigation bypass during emergency lockdown
@@ -206,7 +210,7 @@ fun LockdownSecurityScreen(
             }
 
             Text(
-                text = "SYSTEM LOCKDOWN ACTIVE",
+                text = "FULL ANDROID SYSTEM LOCKED",
                 color = TextWhite,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
@@ -215,9 +219,9 @@ fun LockdownSecurityScreen(
             )
 
             Text(
-                text = "All application controls, menus, and external functions are locked.",
+                text = "Kiosk Screen Pinning active. Home button, App Switcher, and status bar are restricted until master authorization.",
                 color = TextMuted,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 textAlign = TextAlign.Center
             )
         }
@@ -386,7 +390,38 @@ fun LockdownSecurityScreen(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // System Device Admin Status / Action
+            if (showDeviceAdminControls) {
+            if (isDeviceAdminActive) {
+                Button(
+                    onClick = { onHardwareLock() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E0505)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusRed.copy(alpha = 0.5f)),
+                    modifier = Modifier.height(38.dp).testTag("btn_lock_hardware_display")
+                ) {
+                    Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = StatusRed, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Turn Off & Lock Hardware Display", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Button(
+                    onClick = onEnableDeviceAdmin,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E0E0E)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusRed.copy(alpha = 0.4f)),
+                    modifier = Modifier.height(38.dp).testTag("btn_authorize_device_admin_lockdown")
+                ) {
+                    Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = StatusRed, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Enable Device Admin for Hardware Display Lock", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
+            }
 
         // BOTTOM SECURITY STATUS BAR
         Row(

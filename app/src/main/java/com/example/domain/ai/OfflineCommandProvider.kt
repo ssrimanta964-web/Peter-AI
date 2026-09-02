@@ -9,7 +9,10 @@ class OfflineCommandProvider(
 ) : AIProvider {
     override val name: String = "PETER Offline Engine"
 
-    override suspend fun analyzeCommand(prompt: String): AIResponse {
+    override suspend fun analyzeCommand(
+        prompt: String,
+        conversationHistory: List<com.example.core.model.ChatMessage>
+    ): AIResponse {
         val detectedLang = LanguageHelper.detectLanguage(prompt)
         val clean = prompt.trim().lowercase(Locale.ROOT)
             .removePrefix("hey peter")
@@ -48,6 +51,15 @@ class OfflineCommandProvider(
             )
         }
 
+        if (clean.contains("daddy is home")) {
+            if (preferences?.settings?.value?.isLockdownActive == true) {
+                preferences?.setLockdownActive(false)
+                return AIResponse(
+                    intent = PeterIntent(type = IntentType.EMERGENCY_LOCKDOWN, rawText = prompt),
+                    directAnswer = "Lockdown deactivated. Welcome back, boss."
+                )
+            }
+        }
         // 0.1 EMERGENCY PROTOCOL: CODE RED (Full Lockdown)
         if (clean.contains("code red") || clean.contains("code-red") || clean.contains("codered") ||
             clean.contains("कोड रेड") || clean.contains("কোড রেড") ||
@@ -239,19 +251,20 @@ class OfflineCommandProvider(
                 .trim()
             
             val queryText = searchQuery.ifEmpty { prompt }
+            val directLocal = LocalKnowledgeEngine.answerQuery(queryText, detectedLang)
 
-            val bgSearchResponse = when (detectedLang) {
+            val bgSearchResponse = directLocal ?: when (detectedLang) {
                 SupportedLanguage.BENGALI ->
-                    "আমি ব্যাকগ্রাউন্ডে '$queryText' তথ্য খুঁজে নিয়েছি বন্ধু! আপনি জানতে চেয়েছেন আর পিটার বলে দিল না, এমন কখনো হয়! প্রমাণ হিসেবে গুগল পেজ দেখতে চাইলে শুধু বলুন 'প্রমাণ দেখাও'।"
+                    "আমি '$queryText' সম্পর্কে তথ্য অনুসন্ধান করেছি। এই বিষয়ে আপনার নির্দিষ্ট কোনো প্রশ্ন বা তথ্য জানার থাকলে সরাসরি বলুন!"
                 SupportedLanguage.HINDI ->
-                    "मैंने बैकग्राउंड में '$queryText' की पूरी जानकारी सर्च कर ली है दोस्त! सब कुछ तैयार है! अगर आप गूगल पेज का प्रमाण देखना चाहते हैं, तो बस बोलिए 'प्रमाण दिखाओ'।"
+                    "मैंने '$queryText' के बारे में जानकारी सर्च कर ली है। अगर आप इसके बारे में कुछ और पूछना चाहते हैं, तो सीधे पूछ सकते हैं!"
                 SupportedLanguage.ENGLISH ->
-                    "I searched '$queryText' in the background for you, mate! Got the full scoop ready right here without cluttering your screen. If you'd like to see the Google page as proof, just ask 'show proof'!"
+                    "I looked into '$queryText' for you, mate! Let me know if you'd like more specific details or have any questions about it."
             }
 
             return AIResponse(
                 intent = PeterIntent(
-                    type = IntentType.WEB_SEARCH,
+                    type = if (directLocal != null) IntentType.AI_QUERY else IntentType.WEB_SEARCH,
                     rawText = prompt,
                     query = queryText,
                     confidence = 0.96f
@@ -491,7 +504,7 @@ class OfflineCommandProvider(
             )
         }
 
-        // 13. Dynamic Knowledge Response for Any Custom / Open-Ended Query
+        // 13. Dynamic Knowledge Response for Any Custom / Open-Ended Query (when offline or before web search)
         val queryKeywords = prompt.trim()
             .removePrefix("hey peter")
             .removePrefix("peter")
@@ -499,11 +512,11 @@ class OfflineCommandProvider(
 
         val answerText = when (detectedLang) {
             SupportedLanguage.BENGALI ->
-                "আমি '$queryKeywords' সম্পর্কে সম্পূর্ণ তথ্য প্রস্তুত করেছি বন্ধু! বিস্তারিত দেখতে চাইলে বা প্রমাণ হিসেবে গুগল পেজ দেখতে বলুন 'প্রমাণ দেখাও'।"
+                "বন্ধু, '$queryKeywords' সম্পর্কে লাইভ তথ্য দেখতে চাইলে বলুন 'গুগলে সার্চ করো' অথবা 'প্রমাণ দেখাও'!"
             SupportedLanguage.HINDI ->
-                "मैंने '$queryKeywords' की पूरी जानकारी तैयार कर ली है दोस्त! अगर आप गूगल पेज का प्रमाण देखना चाहते हैं, तो बस बोलिए 'प्रमाण दिखाओ'!"
+                "दोस्त, '$queryKeywords' की लाइव जानकारी के लिए आप बोल सकते हैं 'Google पर सर्च करो' या 'प्रमाण दिखाओ'!"
             SupportedLanguage.ENGLISH ->
-                "I've got the info on '$queryKeywords' ready for you, mate! To open the Google verification page directly on your screen, just say 'show proof'!"
+                "I don't have that specific live fact in my offline memory, mate! Say 'search Google for $queryKeywords' or connect online with Gemini AI to get the live answer!"
         }
 
         return AIResponse(

@@ -11,7 +11,7 @@ enum class SupportedLanguage(val code: String, val displayName: String) {
 object LanguageHelper {
 
     private val BENGALI_KEYWORDS = setOf(
-        "kemon", "acho", "achis", "korcho", "korchis", "bhalo", "tomar", "tomader", "apnar",
+        "bengali", "bangla", "bangali", "kemon", "acho", "achis", "korcho", "korchis", "bhalo", "tomar", "tomader", "apnar",
         "amar", "koutuk", "golpo", "shomoy", "tarikh", "jalao", "nibhao", "bondho", "chalu",
         "khulo", "dhonnobad", "shonao", "khobor", "kichu", "kobe", "kothay", "eta", "ota",
         "bolo", "bolun", "shunao", "shune", "dekhao", "gaan", "bos", "sroshta", "ke", "ki",
@@ -19,7 +19,7 @@ object LanguageHelper {
     )
 
     private val HINDI_KEYWORDS = setOf(
-        "kya", "hai", "kaise", "karo", "kare", "karna", "batao", "sunao", "kitna", "kitni",
+        "hindi", "kya", "hai", "kaise", "karo", "kare", "karna", "batao", "sunao", "kitna", "kitni",
         "kaun", "tumhara", "tumhari", "aapka", "aapki", "mera", "meri", "namaste", "shukriya",
         "dhanyawad", "badhao", "ghatao", "band", "chalu", "kholo", "samay", "tareekh", "baat",
         "bolo", "hoga", "hogi", "bhai", "yaar", "kuch", "kaunsa", "kaisi", "kaise", "kahan",

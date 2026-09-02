@@ -35,6 +35,9 @@ interface DeviceController {
     fun getNetworkInfo(): NetworkStatus
     fun getDeviceInfo(): DeviceInfo
     fun getCurrentTimeAndDate(): String
+    fun isDeviceAdminActive(): Boolean
+    fun getDeviceAdminPromptIntent(): Intent
+    fun executeHardwareLock(): Boolean
 }
 
 data class BatteryStatus(
@@ -388,5 +391,17 @@ class AndroidDeviceController(private val context: Context) : DeviceController {
         val sdfDate = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
         val now = Date()
         return "It is currently ${sdfTime.format(now)} on ${sdfDate.format(now)}."
+    }
+
+    override fun isDeviceAdminActive(): Boolean {
+        return com.example.receiver.PeterDeviceAdminReceiver.isDeviceAdminActive(context)
+    }
+
+    override fun getDeviceAdminPromptIntent(): Intent {
+        return com.example.receiver.PeterDeviceAdminReceiver.getDeviceAdminPromptIntent(context)
+    }
+
+    override fun executeHardwareLock(): Boolean {
+        return com.example.receiver.PeterDeviceAdminReceiver.lockEntireDevice(context)
     }
 }

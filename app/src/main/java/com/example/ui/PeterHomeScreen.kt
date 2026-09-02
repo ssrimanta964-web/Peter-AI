@@ -93,6 +93,8 @@ fun PeterHomeScreen(
     viewModel: PeterViewModel,
     onStartScreenShare: () -> Unit = {},
     onPickScreenshot: () -> Unit = {},
+    onEnableDeviceAdmin: () -> Unit = {},
+    onLaunchSystemVoiceInput: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -219,6 +221,7 @@ fun PeterHomeScreen(
                         viewModel.toggleWakeWord(!settings.wakeWordEnabled)
                     },
                     onRefreshTelemetry = { viewModel.refreshTelemetry() },
+                    onSettingsClick = { showSettingsDialog = true },
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                 )
 
@@ -403,6 +406,8 @@ fun PeterHomeScreen(
                     onSpeechRateChange = { viewModel.updateSpeechRate(it) },
                     onSpeechPitchChange = { viewModel.updateSpeechPitch(it) },
                     onVoiceChange = { viewModel.updateVoiceName(it) },
+                    onUseNeuralVoiceChange = { viewModel.updateUseNeuralStudioVoice(it) },
+                    onPreviewVoice = { viewModel.previewVoice() },
                     onPreferredLanguageChange = { viewModel.updatePreferredLanguage(it) },
                     onAiProviderChange = { viewModel.updateAiProvider(it) },
                     onWakeWordChange = { viewModel.toggleWakeWord(it) },
@@ -411,6 +416,8 @@ fun PeterHomeScreen(
                     onUpdateBossProfile = { name, title, details, nickname ->
                         viewModel.updateBossProfile(name, title, details, nickname)
                     },
+                    onCustomApiKeyChange = { viewModel.updateCustomApiKey(it) },
+                    onTriggerLockdown = { viewModel.triggerEmergencyLockdown() },
                     onClearHistory = { viewModel.clearConversationHistory() },
                     onDismiss = { showSettingsDialog = false }
                 )
@@ -419,8 +426,10 @@ fun PeterHomeScreen(
             // PERMISSIONS DIALOG
             if (showPermissionsDialog) {
                 PermissionsDashboardDialog(
-                    onDismiss = { showPermissionsDialog = false },
-                    onRequestPermissions = { requestPermissions() }
+                    onRequestPermissions = { requestPermissions() },
+                    onEnableDeviceAdmin = onEnableDeviceAdmin,
+                    isDeviceAdminActive = viewModel.isDeviceAdminActive(),
+                    onDismiss = { showPermissionsDialog = false }
                 )
             }
 
@@ -429,7 +438,10 @@ fun PeterHomeScreen(
                 LockdownSecurityScreen(
                     onUnlockAttempt = { pin ->
                         viewModel.unlockFromLockdown(pin)
-                    }
+                    },
+                    isDeviceAdminActive = viewModel.isDeviceAdminActive(),
+                    onEnableDeviceAdmin = onEnableDeviceAdmin,
+                    onHardwareLock = { viewModel.executeHardwareLock() }
                 )
             }
         }

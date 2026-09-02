@@ -19,7 +19,10 @@ class CommandRouter(
 
     fun getLastSearchQuery(): String? = lastSearchQuery
 
-    suspend fun routeAndExecute(rawPrompt: String): CommandResult {
+    suspend fun routeAndExecute(
+        rawPrompt: String,
+        conversationHistory: List<com.example.core.model.ChatMessage> = emptyList()
+    ): CommandResult {
         val lang = LanguageHelper.detectLanguage(rawPrompt)
         if (rawPrompt.isBlank()) {
             val emptyMsg = when (lang) {
@@ -35,7 +38,7 @@ class CommandRouter(
         }
 
         // 1. AI Analysis / Intent Extraction
-        val aiResponse = aiBrain.processUserPrompt(rawPrompt)
+        val aiResponse = aiBrain.processUserPrompt(rawPrompt, conversationHistory)
         val intent = aiResponse.intent
 
         // If direct answer was provided by conversational AI
@@ -47,7 +50,7 @@ class CommandRouter(
                     success = true,
                     intentType = IntentType.WEB_SEARCH,
                     spokenResponse = aiResponse.directAnswer,
-                    displayDetails = "Background Search Complete • Proof available on request",
+                    displayDetails = "Background Search Complete",
                     searchQuery = query
                 )
             } else if (intent.type == IntentType.SHOW_PROOF) {
@@ -88,13 +91,12 @@ class CommandRouter(
             IntentType.SCREEN_SEARCH -> executeScreenSearch(intent, lang)
             IntentType.EMERGENCY_LOCKDOWN -> executeEmergencyLockdown(intent, lang)
             IntentType.AI_QUERY -> {
-                // If query reached here without direct answer
                 val raw = intent.query.ifEmpty { intent.rawText }
                 lastSearchQuery = raw
                 val fallbackSpoken = when (lang) {
-                    SupportedLanguage.BENGALI -> "আমি তথ্যটি প্রস্তুত করেছি বন্ধু! প্রমাণ হিসেবে গুগল পেজ দেখতে চাইলে শুধু বলুন 'প্রমাণ দেখাও'।"
-                    SupportedLanguage.HINDI -> "जानकारी तैयार है दोस्त! अगर आप गूगल पेज का प्रमाण देखना चाहते हैं, तो कहें 'प्रमाण दिखाओ'।"
-                    SupportedLanguage.ENGLISH -> "I've got the info ready for you, mate! If you'd like to see the Google page as proof, just say 'show proof'!"
+                    SupportedLanguage.BENGALI -> "আমি এই বিষয়ে তথ্য সংগ্রহ করেছি। আপনার আরও কিছু জানার থাকলে নির্দ্বিধায় জিজ্ঞাসা করুন!"
+                    SupportedLanguage.HINDI -> "मैंने इस बारे में जानकारी ढूंढ ली है। अगर आप और कुछ जानना चाहते हैं, तो बेझिझक पूछें!"
+                    SupportedLanguage.ENGLISH -> "I've processed your query, mate. Let me know if you'd like to explore this further or ask anything else!"
                 }
                 CommandResult(
                     success = true,
@@ -436,16 +438,16 @@ class CommandRouter(
         lastSearchQuery = query
 
         val spoken = when (lang) {
-            SupportedLanguage.HINDI -> "मैंने बैकग्राउंड में '$query' सर्च कर लिया है दोस्त! (गूगल पेज का प्रमाण देखने के लिए कहें 'प्रमाण दिखाओ')।"
-            SupportedLanguage.BENGALI -> "আমি ব্যাকগ্রাউন্ডে '$query' সার্চ করে নিয়েছি বন্ধু! (গুগল পেজ দেখতে চাইলে বলুন 'প্রমাণ দেখাও')।"
-            SupportedLanguage.ENGLISH -> "I searched for '$query' in the background, mate! (If you'd like to see the Google page as proof, just say 'show proof'!)"
+            SupportedLanguage.HINDI -> "मैंने '$query' के बारे में जानकारी सर्च कर ली है।"
+            SupportedLanguage.BENGALI -> "আমি '$query' সম্পর্কে তথ্য খুঁজে নিয়েছি।"
+            SupportedLanguage.ENGLISH -> "I searched for '$query' for you, mate!"
         }
 
         return CommandResult(
             success = true,
             intentType = IntentType.WEB_SEARCH,
             spokenResponse = spoken,
-            displayDetails = "Background Search: '$query' • Proof available on request",
+            displayDetails = "Search Query: '$query'",
             searchQuery = query
         )
     }

@@ -73,7 +73,7 @@ fun HudLeftDockPanel(
             HudAppBevelIcon(abbr = "St", label = "SNIP TOOL", onClick = onSnipScreenClick, testTag = "app_dock_snip")
             HudAppBevelIcon(abbr = "V", label = "VEGAS PRO", onClick = onMediaClick, testTag = "app_dock_vegas")
             HudAppBevelIcon(abbr = "Sn", label = "STICKY NOTE", onClick = onChatLogClick, testTag = "app_dock_notes")
-            HudAppBevelIcon(abbr = "Np", label = "NOTEPAD", onClick = onSettingsClick, testTag = "app_dock_notepad")
+            HudAppBevelIcon(abbr = "Se", label = "SETTINGS", onClick = onSettingsClick, testTag = "app_dock_notepad")
             HudAppBevelIcon(abbr = "Wd", label = "WORD", onClick = onInternetClick, testTag = "app_dock_word")
         }
 

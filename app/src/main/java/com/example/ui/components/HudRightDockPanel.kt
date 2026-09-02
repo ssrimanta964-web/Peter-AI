@@ -52,7 +52,7 @@ fun HudRightDockPanel(
             HudHoloNodeItem(label = "E-MAIL", onClick = onVoiceAssistantClick, isLeftAligned = false, testTag = "node_email")
             HudHoloNodeItem(label = "SCREEN REC", onClick = onScreenShareClick, isLeftAligned = false, testTag = "node_screen_rec")
             HudHoloNodeItem(label = "SOUND REC", onClick = onWakeWordClick, isLeftAligned = false, testTag = "node_sound_rec")
-            HudHoloNodeItem(label = "UNINSTALL", onClick = onLockdownClick, isLeftAligned = false, testTag = "node_uninstall")
+            HudHoloNodeItem(label = "LOCKDOWN", onClick = onLockdownClick, isLeftAligned = false, testTag = "node_lockdown")
             HudHoloNodeItem(label = "BURNING", onClick = onTorchClick, isLeftAligned = false, testTag = "node_burning")
             HudHoloNodeItem(label = "REMOTE", onClick = onVolumeToggleClick, isLeftAligned = false, testTag = "node_remote")
             HudHoloNodeItem(label = "TORRENTS", onClick = onGoogleProofClick, isLeftAligned = false, testTag = "node_torrents")

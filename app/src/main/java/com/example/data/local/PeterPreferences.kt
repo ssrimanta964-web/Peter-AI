@@ -7,9 +7,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class PeterSettings(
-    val speechRate: Float = 1.08f,
-    val speechPitch: Float = 1.02f,
-    val voiceName: String = "Tom Holland Male (British)",
+    val speechRate: Float = 1.10f,
+    val speechPitch: Float = 1.12f,
+    val voiceName: String = "Tom Holland Male (British Young Hero)",
+    val useNeuralStudioVoice: Boolean = true,
     val preferredLanguage: String = "Auto Detect (English, Hindi, Bengali)", // "Auto Detect (English, Hindi, Bengali)", "English", "Hindi (हिन्दी)", "Bengali (বাংলা)"
     val aiProvider: String = "Auto (Gemini + Local)", // "Auto (Gemini + Local)", "Local Only", "Cloud Only"
     val wakeWordEnabled: Boolean = true,
@@ -20,7 +21,8 @@ data class PeterSettings(
     val bossTitle: String = "Creator & Boss",
     val bossDetails: String = "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!",
     val bossNickname: String = "Boss",
-    val isLockdownActive: Boolean = false
+    val isLockdownActive: Boolean = false,
+    val customApiKey: String = ""
 )
 
 class PeterPreferences(context: Context) {
@@ -31,9 +33,10 @@ class PeterPreferences(context: Context) {
 
     private fun loadSettings(): PeterSettings {
         return PeterSettings(
-            speechRate = prefs.getFloat(KEY_SPEECH_RATE, 1.08f),
-            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.02f),
-            voiceName = prefs.getString(KEY_VOICE_NAME, "Tom Holland Male (British)") ?: "Tom Holland Male (British)",
+            speechRate = prefs.getFloat(KEY_SPEECH_RATE, 1.10f),
+            speechPitch = prefs.getFloat(KEY_SPEECH_PITCH, 1.12f),
+            voiceName = prefs.getString(KEY_VOICE_NAME, "Tom Holland Male (British Young Hero)") ?: "Tom Holland Male (British Young Hero)",
+            useNeuralStudioVoice = prefs.getBoolean(KEY_NEURAL_VOICE, true),
             preferredLanguage = prefs.getString(KEY_LANGUAGE, "Auto Detect (English, Hindi, Bengali)") ?: "Auto Detect (English, Hindi, Bengali)",
             aiProvider = prefs.getString(KEY_AI_PROVIDER, "Auto (Gemini + Local)") ?: "Auto (Gemini + Local)",
             wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD, true),
@@ -44,7 +47,8 @@ class PeterPreferences(context: Context) {
             bossTitle = prefs.getString(KEY_BOSS_TITLE, "Creator & Boss") ?: "Creator & Boss",
             bossDetails = prefs.getString(KEY_BOSS_DETAILS, "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!") ?: "Visionary creator of PETER AI, genius software engineer, tech innovator, and superhero commander!",
             bossNickname = prefs.getString(KEY_BOSS_NICKNAME, "Boss") ?: "Boss",
-            isLockdownActive = prefs.getBoolean(KEY_LOCKDOWN_ACTIVE, false)
+            isLockdownActive = prefs.getBoolean(KEY_LOCKDOWN_ACTIVE, false),
+            customApiKey = prefs.getString(KEY_CUSTOM_API_KEY, "") ?: ""
         )
     }
 
@@ -108,15 +112,26 @@ class PeterPreferences(context: Context) {
         _settings.value = _settings.value.copy(autoSpeakResponses = enabled)
     }
 
+    fun updateUseNeuralStudioVoice(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NEURAL_VOICE, enabled).apply()
+        _settings.value = _settings.value.copy(useNeuralStudioVoice = enabled)
+    }
+
     fun setLockdownActive(active: Boolean) {
         prefs.edit().putBoolean(KEY_LOCKDOWN_ACTIVE, active).apply()
         _settings.value = _settings.value.copy(isLockdownActive = active)
+    }
+
+    fun updateCustomApiKey(apiKey: String) {
+        prefs.edit().putString(KEY_CUSTOM_API_KEY, apiKey.trim()).apply()
+        _settings.value = _settings.value.copy(customApiKey = apiKey.trim())
     }
 
     companion object {
         private const val KEY_SPEECH_RATE = "key_speech_rate"
         private const val KEY_SPEECH_PITCH = "key_speech_pitch"
         private const val KEY_VOICE_NAME = "key_voice_name"
+        private const val KEY_NEURAL_VOICE = "key_neural_voice"
         private const val KEY_LANGUAGE = "key_preferred_language"
         private const val KEY_AI_PROVIDER = "key_ai_provider"
         private const val KEY_WAKE_WORD = "key_wake_word"
@@ -128,5 +143,6 @@ class PeterPreferences(context: Context) {
         private const val KEY_BOSS_DETAILS = "key_boss_details"
         private const val KEY_BOSS_NICKNAME = "key_boss_nickname"
         private const val KEY_LOCKDOWN_ACTIVE = "key_lockdown_active"
+        private const val KEY_CUSTOM_API_KEY = "key_custom_gemini_api_key"
     }
 }

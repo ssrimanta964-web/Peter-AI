@@ -57,6 +57,8 @@ import com.example.ui.theme.TextWhite
 @Composable
 fun PermissionsDashboardDialog(
     onRequestPermissions: () -> Unit,
+    onEnableDeviceAdmin: () -> Unit = {},
+    isDeviceAdminActive: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -108,7 +110,7 @@ fun PermissionsDashboardDialog(
                 }
 
                 Text(
-                    text = "PETER requires specific Android runtime permissions to process voice streams, control device features, and run low-power background operations.",
+                    text = "PETER requires specific Android permissions to process voice streams, control device features, and restrict the entire Android system during Lockdown.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -133,6 +135,26 @@ fun PermissionsDashboardDialog(
                     title = "System Notifications",
                     description = "Allows low-power foreground notification for continuous background wake-word.",
                     isGranted = hasNotif
+                )
+
+                // Full Android Lockdown Device Administrator Card
+                PermissionStatusCard(
+                    icon = Icons.Default.Security,
+                    title = "System Device Administrator",
+                    description = "Enables full hardware screen locking and system restrictions for Emergency Lockdown (Code Red).",
+                    isGranted = isDeviceAdminActive,
+                    actionButton = if (!isDeviceAdminActive) {
+                        {
+                            Button(
+                                onClick = onEnableDeviceAdmin,
+                                colors = ButtonDefaults.buttonColors(containerColor = StatusRed),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.testTag("btn_enable_device_admin")
+                            ) {
+                                Text("Enable", fontSize = 11.sp, color = TextWhite, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else null
                 )
 
                 Spacer(modifier = Modifier.size(4.dp))
@@ -160,7 +182,8 @@ fun PermissionStatusCard(
     icon: ImageVector,
     title: String,
     description: String,
-    isGranted: Boolean
+    isGranted: Boolean,
+    actionButton: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -182,12 +205,16 @@ fun PermissionStatusCard(
             Text(title, color = TextWhite, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(description, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
         }
-        Icon(
-            imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
-            contentDescription = null,
-            tint = if (isGranted) SophisticatedCyan else StatusRed,
-            modifier = Modifier.size(20.dp)
-        )
+        if (actionButton != null) {
+            actionButton()
+        } else {
+            Icon(
+                imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
+                contentDescription = null,
+                tint = if (isGranted) SophisticatedCyan else StatusRed,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 

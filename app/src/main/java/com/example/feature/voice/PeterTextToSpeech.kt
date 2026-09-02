@@ -5,19 +5,25 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
+import com.example.data.local.PeterPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class PeterTextToSpeech(
     private val context: Context,
+    private val preferences: PeterPreferences? = null,
     private val onSpeakingStateChanged: (Boolean) -> Unit
 ) : TextToSpeech.OnInitListener {
 
     companion object {
         private const val TAG = "PeterTTS"
-        const val DEFAULT_TOM_HOLLAND_VOICE = "Tom Holland Male (British)"
+        const val DEFAULT_TOM_HOLLAND_VOICE = "Tom Holland Male (British Young Hero)"
     }
 
     private var tts: TextToSpeech? = null
@@ -30,9 +36,15 @@ class PeterTextToSpeech(
     val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
 
     private var pendingSpeechText: String? = null
-    private var targetRate: Float = 1.08f
-    private var targetPitch: Float = 1.02f
+    private var targetRate: Float = 1.10f
+    private var targetPitch: Float = 1.12f
     private var targetVoiceName: String = DEFAULT_TOM_HOLLAND_VOICE
+
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val geminiSynthesizer = GeminiSpeechSynthesizer(context, preferences) { speaking ->
+        _isSpeaking.value = speaking
+        onSpeakingStateChanged(speaking)
+    }
 
     init {
         // Prefer Google TTS engine for highest quality natural neural male voices, fallback to default
@@ -59,7 +71,11 @@ class PeterTextToSpeech(
             val maleVoices = allVoices.filter { isMaleVoice(it) }.sortedByDescending { tomHollandScore(it) }
             val otherVoices = allVoices.filter { !isMaleVoice(it) }
 
-            val voiceList = mutableListOf(DEFAULT_TOM_HOLLAND_VOICE)
+            val voiceList = mutableListOf(
+                DEFAULT_TOM_HOLLAND_VOICE,
+                "⚡ Gemini Neural Studio (Puck - Lifelike Tom Holland)",
+                "Tom Holland Male (British Fast & Energetic)"
+            )
             maleVoices.forEach { voiceList.add(it.name) }
             otherVoices.forEach { voiceList.add(it.name) }
             _availableVoices.value = voiceList
@@ -110,8 +126,8 @@ class PeterTextToSpeech(
     }
 
     /**
-     * Cleans text and transforms laughter cues (*laughs*, *chuckles*, haha) into
-     * expressive, natural human phonetic pauses and laughs for fluent TTS delivery.
+     * Cleans text and transforms conversational cues (*laughs*, *chuckles*, haha) into
+     * expressive, natural human phonetic pauses and laughs for authentic Tom Holland delivery.
      */
     private fun preprocessTextForNaturalSpeech(rawText: String): String {
         var text = rawText
@@ -122,7 +138,7 @@ class PeterTextToSpeech(
             .replace(Regex("#+\\s*"), "")
             .replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
             .replace(Regex("[-•]\\s+"), "")
-            // Transform asterisks / bracketed action descriptions into natural laughter
+            // Transform action descriptions into lively conversational fillers
             .replace(Regex("(?i)\\*(laughs|chuckles|giggles|laughs out loud|snickers)\\*"), "Haha!")
             .replace(Regex("(?i)\\((laughs|chuckles|giggles|snickers)\\)"), "Haha!")
             .replace(Regex("(?i)\\[(laughs|chuckles|giggles)\\]"), "Haha!")
@@ -182,13 +198,15 @@ class PeterTextToSpeech(
         var score = 0
 
         // #1 Top priority: British young male voices (Tom Holland soundalike)
-        if (name.contains("en-gb-x-rjs")) score += 500
+        if (name.contains("en-gb-x-rjs")) score += 500 // High-energy British young hero
         if (name.contains("en-gb-x-gbd")) score += 450
         if (name.contains("en-gb-x-gbb")) score += 400
         if (name.contains("en-gb-x-rpj")) score += 350
 
         // General British English male
-        if ((voice.locale.country.equals("GB", ignoreCase = true) || voice.locale.language.equals("en_GB", ignoreCase = true) || name.contains("en-gb")) && isMaleVoice(voice)) {
+        if ((voice.locale.country.equals("GB", ignoreCase = true) ||
+             voice.locale.language.equals("en_GB", ignoreCase = true) ||
+             name.contains("en-gb")) && isMaleVoice(voice)) {
             score += 250
         }
 
@@ -259,8 +277,8 @@ class PeterTextToSpeech(
 
     fun speak(
         text: String,
-        rate: Float = 1.08f,
-        pitch: Float = 1.02f,
+        rate: Float = 1.10f,
+        pitch: Float = 1.12f,
         voiceName: String = DEFAULT_TOM_HOLLAND_VOICE,
         onDone: (() -> Unit)? = null
     ) {
@@ -269,29 +287,66 @@ class PeterTextToSpeech(
         targetVoiceName = voiceName
         currentOnDoneCallback = onDone
 
+        val processedText = preprocessTextForNaturalSpeech(text)
+        val detectedLang = detectLanguage(processedText)
+
+        // Stop any current playback
+        stop()
+
+        val shouldUseNeural = preferences?.settings?.value?.useNeuralStudioVoice ?: true
+
+        // If Neural Studio Voice is enabled, attempt realistic Gemini Neural Synthesis (voice "Puck" - Tom Holland soundalike)
+        if (shouldUseNeural && detectedLang == "en") {
+            scope.launch {
+                val neuralSuccess = geminiSynthesizer.synthesizeAndPlay(
+                    text = processedText,
+                    voiceName = GeminiSpeechSynthesizer.TOM_HOLLAND_PUCK_VOICE,
+                    onDone = onDone
+                )
+
+                if (!neuralSuccess) {
+                    // Fallback to local Android TTS with fine-tuned Tom Holland parameters
+                    speakLocal(processedText, rate, pitch, voiceName, detectedLang)
+                }
+            }
+            return
+        }
+
+        // Local Speech Path
+        speakLocal(processedText, rate, pitch, voiceName, detectedLang)
+    }
+
+    private fun speakLocal(
+        processedText: String,
+        rate: Float,
+        pitch: Float,
+        voiceName: String,
+        detectedLang: String
+    ) {
         if (!isInitialized) {
-            pendingSpeechText = text
+            pendingSpeechText = processedText
             return
         }
 
         tts?.let { engine ->
-            val processedText = preprocessTextForNaturalSpeech(text)
-
             // Dynamic Pitch & Energy Modulation for Laughter & Excitement (Tom Holland higher energetic inflection)
             val containsHumorOrLaugh = processedText.contains("Haha", ignoreCase = true) ||
                     processedText.contains("Hehe", ignoreCase = true) ||
                     processedText.contains("!", ignoreCase = true)
             
-            val adjustedPitch = if (containsHumorOrLaugh) (pitch * 1.04f).coerceAtMost(1.25f) else pitch
-            val adjustedRate = if (containsHumorOrLaugh) (rate * 1.02f).coerceAtMost(1.25f) else rate
+            // Tom Holland base pitch is youthful (~1.12f), with enthusiastic modulation
+            val effectivePitch = if (pitch <= 1.05f) 1.12f else pitch
+            val effectiveRate = if (rate <= 1.05f) 1.10f else rate
+
+            val adjustedPitch = if (containsHumorOrLaugh) (effectivePitch * 1.04f).coerceAtMost(1.30f) else effectivePitch
+            val adjustedRate = if (containsHumorOrLaugh) (effectiveRate * 1.02f).coerceAtMost(1.28f) else effectiveRate
 
             engine.setSpeechRate(adjustedRate)
             engine.setPitch(adjustedPitch)
 
-            val detectedLang = detectLanguage(processedText)
             if (voiceName != DEFAULT_TOM_HOLLAND_VOICE &&
-                voiceName != "Tom Holland Male (Default)" &&
-                voiceName != "Spider-Man Male (Default)" &&
+                !voiceName.startsWith("Tom Holland") &&
+                !voiceName.startsWith("⚡") &&
                 voiceName != "Default"
             ) {
                 val matchedVoice = engine.voices?.firstOrNull { it.name == voiceName }
@@ -305,22 +360,22 @@ class PeterTextToSpeech(
             }
 
             val utteranceId = "PETER_TTS_${System.currentTimeMillis()}"
-            // Queue mode QUEUE_FLUSH stops previous speech to prevent overlapping and ensure smooth conversational flow
             engine.speak(processedText, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
         }
     }
 
     fun stop() {
+        geminiSynthesizer.stop()
         tts?.stop()
         _isSpeaking.value = false
         onSpeakingStateChanged(false)
     }
 
     fun shutdown() {
+        geminiSynthesizer.stop()
         tts?.stop()
         tts?.shutdown()
         tts = null
         isInitialized = false
     }
 }
-

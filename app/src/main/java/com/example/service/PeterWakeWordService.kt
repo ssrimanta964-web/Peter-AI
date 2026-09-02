@@ -23,6 +23,9 @@ import com.example.domain.device.AndroidDeviceController
 import com.example.domain.router.CommandRouter
 import com.example.feature.voice.PeterTextToSpeech
 import com.example.feature.voice.PeterWakeWordDetector
+import com.example.service.LockdownOverlayManager
+import kotlinx.coroutines.flow.collectLatest
+import android.provider.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,10 +39,21 @@ class PeterWakeWordService : Service() {
     private var commandRouter: CommandRouter? = null
     private var repository: PeterRepository? = null
 
+    private var partialWakeLock: PowerManager.WakeLock? = null
+    private var overlayManager: LockdownOverlayManager? = null
+
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            partialWakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Peter:PersistentWakeLock")
+            partialWakeLock?.acquire()
+        } catch (e: Exception) {
+            // Ignore
+        }
 
+        createNotificationChannel()
         val deviceController = AndroidDeviceController(this)
         val preferences = PeterPreferences(this)
         val aiBrain = AIBrain(deviceController, preferences)
@@ -47,7 +61,24 @@ class PeterWakeWordService : Service() {
         repository = PeterRepository(db, preferences)
         commandRouter = CommandRouter(this, deviceController, aiBrain)
 
-        tts = PeterTextToSpeech(this) {}
+        tts = PeterTextToSpeech(this, preferences) {}
+        overlayManager = LockdownOverlayManager(this)
+        serviceScope.launch {
+            preferences.settings.collectLatest { settings ->
+                if (settings.isLockdownActive) {
+                    if (Settings.canDrawOverlays(this@PeterWakeWordService)) {
+                        overlayManager?.showOverlay(onUnlockAttempt = { password -> 
+                            val isUnlocked = password.trim().equals("Daddy is home", ignoreCase = true)
+                            if (isUnlocked) preferences.setLockdownActive(false)
+                            isUnlocked
+                        })
+                    }
+                } else {
+                    overlayManager?.hideOverlay()
+                }
+            }
+        }
+
 
         wakeWordDetector = PeterWakeWordDetector(this) { detectedText ->
             serviceScope.launch {
@@ -63,6 +94,30 @@ class PeterWakeWordService : Service() {
                     // Ignore wake lock error
                 }
 
+                // Broadcast to MainActivity if it's alive to handle UI transition
+                val broadcastIntent = Intent("com.example.WAKE_WORD_DETECTED").apply {
+                    putExtra("detectedText", detectedText)
+                    setPackage(packageName)
+                }
+                sendBroadcast(broadcastIntent)
+
+                val stripped = detectedText
+                    .replace(Regex("(?i)^(hey|hello|hi|ok|okay|namaste|yo|he|hay|hai|listen|হেই|হ্যালো|শোনো|নমস্কার|হে|सुनो|नमस्ते)?\\s*(peter|piter|pete|pita|pitar|spiderman|spider-man|পিটার|पीटर)\\s*"), "")
+                    .trim()
+
+                if (stripped.isBlank() || stripped.length <= 2) {
+                    val uiIntent = Intent(this@PeterWakeWordService, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    try {
+                        val pendingIntent = PendingIntent.getActivity(this@PeterWakeWordService, 0, uiIntent, PendingIntent.FLAG_IMMUTABLE)
+                        pendingIntent.send()
+                    } catch (e: Exception) {
+                        startActivity(uiIntent)
+                    }
+                    return@launch
+                }
+
                 val result = commandRouter?.routeAndExecute(detectedText)
                 if (result != null) {
                     if (result.intentType == IntentType.EMERGENCY_LOCKDOWN) {
@@ -72,7 +127,12 @@ class PeterWakeWordService : Service() {
                     val uiIntent = Intent(this@PeterWakeWordService, MainActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     }
-                    startActivity(uiIntent)
+                    try {
+                        val pendingIntent = PendingIntent.getActivity(this@PeterWakeWordService, 1, uiIntent, PendingIntent.FLAG_IMMUTABLE)
+                        pendingIntent.send()
+                    } catch (e: Exception) {
+                        startActivity(uiIntent)
+                    }
 
                     if (preferences.settings.value.autoSpeakResponses) {
                         val s = preferences.settings.value
@@ -102,6 +162,10 @@ class PeterWakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            partialWakeLock?.let { if (it.isHeld) it.release() }
+        } catch (e: Exception) {}
+        
         wakeWordDetector?.stop()
         tts?.shutdown()
         super.onDestroy()

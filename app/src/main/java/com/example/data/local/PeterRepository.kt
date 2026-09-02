@@ -16,6 +16,10 @@ class PeterRepository(
         entities.map { it.toChatMessage() }
     }
 
+    suspend fun getRecentMessages(limit: Int = 10): List<ChatMessage> {
+        return chatMessageDao.getRecentMessagesList(limit).map { it.toChatMessage() }
+    }
+
     suspend fun saveMessage(message: ChatMessage): Long {
         return chatMessageDao.insertMessage(
             ChatMessageEntity(

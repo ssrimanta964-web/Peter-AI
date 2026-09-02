@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.HearingDisabled
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,6 +69,7 @@ fun HudTopTelemetryPanel(
     isWakeWordServiceRunning: Boolean,
     onToggleWakeWord: () -> Unit,
     onRefreshTelemetry: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val transition = rememberInfiniteTransition(label = "TopSparklineAnim")
@@ -214,6 +216,25 @@ fun HudTopTelemetryPanel(
                         contentDescription = "Refresh Telemetry",
                         tint = HudTextCyan,
                         modifier = Modifier.size(11.dp)
+                    )
+                }
+
+                // Settings button
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(HudPanelBg)
+                        .border(1.dp, HudCyanNeon, CircleShape)
+                        .clickable(onClick = onSettingsClick)
+                        .testTag("top_settings_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = HudCyanNeon,
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
