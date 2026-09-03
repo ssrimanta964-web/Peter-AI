@@ -24,7 +24,7 @@ class GeminiCloudProvider(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val supportedModels = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest", "gemini-3.5-flash")
+    private val supportedModels = listOf("gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest")
 
     override suspend fun analyzeCommand(
         prompt: String,
@@ -166,6 +166,15 @@ class GeminiCloudProvider(
 
                 if (!response.isSuccessful) {
                     android.util.Log.e("GeminiAPI", "Failed request to $modelName: ${response.code} ${response.message} - Body: $responseBody")
+                    
+                    if (response.code == 401 || response.code == 403) {
+                        return@withContext AIResponse(
+                            intent = PeterIntent(type = IntentType.AI_QUERY, rawText = prompt, query = prompt),
+                            error = "Invalid API Key",
+                            directAnswer = "Boss, the Google Cloud servers rejected my API key. Please check your settings and make sure the key is copied completely and correctly!",
+                            isFromCloud = false
+                        )
+                    }
                 }
                 if (response.isSuccessful && responseBody.isNotBlank()) {
                     val rootJson = JSONObject(responseBody)
@@ -332,6 +341,15 @@ class GeminiCloudProvider(
 
                 if (!response.isSuccessful) {
                     android.util.Log.e("GeminiAPI", "Failed request to $modelName: ${response.code} ${response.message} - Body: $responseBody")
+                    
+                    if (response.code == 401 || response.code == 403) {
+                        return@withContext AIResponse(
+                            intent = PeterIntent(type = IntentType.AI_QUERY, rawText = userPrompt, query = userPrompt),
+                            error = "Invalid API Key",
+                            directAnswer = "Boss, the Google Cloud servers rejected my API key. Please check your settings and make sure the key is copied completely and correctly!",
+                            isFromCloud = false
+                        )
+                    }
                 }
                 if (response.isSuccessful && responseBody.isNotBlank()) {
                     val rootJson = JSONObject(responseBody)
